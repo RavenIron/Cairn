@@ -465,7 +465,7 @@
 <div class="page">
 
   <header class="masthead">
-    <div class="eyebrow">Raven Iron &middot; design document &middot; revised 2026-09-02</div>
+    <div class="eyebrow">Raven Iron &middot; design document &middot; built and verified 2026-09-02</div>
     <h1>Cairn</h1>
     <p class="deck">On a world with no map and no portals, knowing where you are is knowledge. Cairn makes that knowledge something you can stack, light, and lose &mdash; without ever drawing it on the screen.</p>
 
@@ -483,8 +483,8 @@
         <span>The footprint that separates a cairn from a wall. <em>Shape, not piece count.</em></span>
       </div>
       <div class="reading">
-        <b>&mdash;</b>
-        <span>The fog horizon. <em>Unmeasured. This is the gate.</em></span>
+        <b>420 m</b>
+        <span>Where the first fire was seen from. <em>Down a chain of fifteen.</em></span>
       </div>
     </div>
   </header>
@@ -690,6 +690,46 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
 
   <section>
     <div class="rail">
+      <span class="mark mark-measured">built</span>
+      <span class="rail-note">Every line below is a thing the world did, not a thing the code claims.</span>
+    </div>
+    <div class="col">
+      <h2>What the world said</h2>
+      <p>All of it was built and run on a dedicated server, against cairns a person stacked by hand rather than fixtures a test invented.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Claim</th><th scope="col">How the world answered</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Stone becomes a cairn</td><td>62 stacked stones resolved into 14 separate cairns, no false merges</td></tr>
+            <tr><td>A sign names one</td><td>keyed on the sign, which does not move, keeping its history</td></tr>
+            <tr><td>The light carries</td><td>seen down a chain of fifteen spanning 420&nbsp;m</td></tr>
+            <tr><td>Terrain hides it</td><td>242&nbsp;m visible while 222&nbsp;m and 292&nbsp;m were dark</td></tr>
+            <tr><td>The ledger remembers</td><td>survived six restarts and a format migration intact</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The occlusion row is the one that mattered most, and the proof is that it <em>discriminates</em>. A broken raycast gives all-hidden or all-lit; a ragged pattern with near cairns dark and a far one burning is what real ground produces. A beacon that shone through a mountain would have been a waypoint marker in a costume, and it would have been the easiest failure in the whole project to never notice &mdash; because by then everything else already looked right.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-open">four theories</span>
+      <span class="rail-note">A companion piece to the measurement that lied.</span>
+    </div>
+    <div class="col">
+      <h2>The bird cost four wrong answers</h2>
+      <p>The raven was the smallest feature in the mod and took the longest, and every hour of it went the same way: a confident, plausible theory, killed by one line of measurement.</p>
+      <p><strong>First</strong>, that no raven existed in the world &mdash; reasonable, since the prefab is nowhere in the scene's list. The diagnostic said <code>raven in scene : True</code>. <strong>Second</strong>, that appending our line politely to the end of vanilla's queue would work. It could never: the selector returns the <em>first</em> match and stops, four untriggered tutorials sat ahead of it, and being maximally deferential is precisely what guaranteed silence. The politeness was the bug. <strong>Third</strong>, that <code>planted</code> meant registered &mdash; it only ever meant we had made a GameObject, and three round trips vanished into the gap between our half of the exchange and vanilla's.</p>
+      <p><strong>Fourth</strong> was right, and only because by then the instrument reported the game's verdict rather than our intention. Valheim has two ravens. <code>m_instance</code> is whichever spawned, and the selector discards any line whose <code>m_munin</code> flag differs from the bird's own &mdash; before distance, before priority, before anything. The world's bird was <strong>Munin</strong>. A correctly registered, correctly positioned line was thrown away by a boolean while every other signal read healthy.</p>
+      <p>The lesson is not "measure more". It is <em>what</em> to measure. Three instruments reported our own state and none of them could find this; the one that worked asked vanilla's selector what it had chosen and printed the answer. <code>GetBestText : OURS</code> is not an opinion about whether the thing should work.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
       <span class="mark mark-closed">boundaries</span>
     </div>
     <div class="col">
@@ -714,13 +754,15 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
 
   <section>
     <div class="rail">
-      <span class="mark mark-open">unresolved</span>
-      <span class="rail-note">Decide before any name leaves the sign it was written on.</span>
+      <span class="mark mark-measured">answered</span>
+      <span class="rail-note">It came due the moment a bird opened its beak.</span>
     </div>
     <div class="col">
-      <h2>The one thing left deliberately open</h2>
-      <p>A named sign is player-authored text, and Cairn gives it reach it did not have before. A name that previously only a visitor read could be spoken aloud by the raven, or hung on a beacon visible from across a valley.</p>
-      <p>Vanilla already has a viewability flag and a mute path on <code>Sign</code>. Cairn has to decide what it honours, and on a shared server the conservative answer is the right default. This is a moderation surface Ragnarok's Wrath never had, and it is listed as unresolved rather than quietly assumed &mdash; because the failure mode is not a bug report, it is somebody's evening.</p>
+      <h2>The question that was left open, and when it came due</h2>
+      <p>This document used to end with one thing deliberately unresolved. A named sign is player-authored text, and Cairn gives it reach it never had: a name only a visitor could read might now be spoken aloud, or hung on a light visible across a valley. The note said <em>decide before any name leaves the sign it was written on</em>, and left it there.</p>
+      <p>That moment arrived with the raven. A bird saying a player's words out loud <em>is</em> the name leaving the sign, so the question stopped being hypothetical and had to be answered in the same commit that built the voice.</p>
+      <p><strong>The answer is a split: storage stays faithful, display decides.</strong> The ledger keeps exactly what was typed, rich-text tags and all &mdash; it is a record, and a record that quietly edits itself is worse than one that holds something awkward. Everything on the way <em>out</em> strips markup, so no name reaching a raven's mouth carries colour tags or size tags or anything that could paint over the rest of the dialogue.</p>
+      <p>The stripper is narrow on purpose, and its tests are the argument: a cairn called <code>&lt;-- the ford</code> survives being spoken, so does <code>cost &lt;3 stone</code>, and a tag cannot span a line break. Ordinary prose almost never contains <code>&lt;word&gt;</code>; being greedier would eat text somebody meant to keep. That the rule can differ per channel is the whole benefit of putting it at the display end rather than the storage end.</p>
     </div>
   </section>
 
@@ -739,7 +781,7 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
   <div class="closing">
     <span>Raven Iron &middot; Cairn &middot; design document</span>
     <span>Engine facts decompiled from the shipping assembly, 2026-09-01 and 02</span>
-    <span>Skeleton and ledger verified on a dedicated server. The light is not built.</span>
+    <span>Built, and verified on a dedicated server against cairns stacked by hand.</span>
   </div>
 </div>
 

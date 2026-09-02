@@ -15,12 +15,19 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: the sign half is VERIFIED LIVE; the stone half is built and tested off-game
-(143/143) but never run.** A player's named sign became a landmark on a real dedicated
-server and reached disk with its values intact. As of 0.3.0 the sweep also walks stone,
-groups it into cairns, and pairs each with the sign that names it — none of which has met a
-real world yet. Task 0 (the fog measurement, `tools\probe\`) is still unrun. See **Build
-order** at the bottom.
+**Status: THE MOD WORKS.** Stacked stones become a cairn, a cairn burns, and the light was
+seen from 420m down a chain of fifteen the owner built by hand.
+
+Every task except the fog probe now has a live run behind it: the skeleton on all three
+roles, the ledger with its sweep, sign pairing, prune, unlight, drift carryover and v1-to-v2
+migration, and the beacon itself. Off-game 156/156, and every load-bearing assertion was
+proven to fail without its fix.
+
+Two things remain unproven. **Terrain occlusion** — the mask resolves and beacons are meant
+to be hidden by a ridge, but resolving is not occluding, and a glow through a mountain is
+the waypoint marker house rule A forbids. And **task 0**, the fog measurement in
+`tools\probe\`, still unrun and now genuinely optional: it was a gate when the beacon was a
+grey plume, and a bright point at night is a different proposition. See **Build order**.
 
 ---
 
@@ -71,6 +78,9 @@ Cairn/                     plugin (net472) — role-aware single DLL
   Core/PileDetection.cs    is this stack of stone a cairn, or a wall
   Core/Persistence.cs      world-scoped store on disk; atomic, fail-safe
   Systems/LandmarkSystem.cs  the sweep: stone becomes cairns, signs name them
+  Net/LandmarkSync.cs      server-to-client beacon push; absolute, broadcast, 5s
+  Visuals/Beacon.cs        the light — client-drawn, gated on a real GPU
+  Patches/Patch_PieceCost.cs the vanilla recipe override (off by default)
   Patches/Patch_Terminal.cs  the `cairn` console
 tests/CoreTests/           net10 harness; compiles the REAL source against stubs
 docs/design-doc.html       source of the published design document
@@ -80,12 +90,11 @@ tools/probe/               the fog probe — research, never shipped, never refe
 libs/                      gitignored; populated by fetch-libs.ps1
 ```
 
-Planned, in build order:
+Planned:
 
 ```
-  Net/LandmarkSync.cs      server-to-client landmark push              task 3
-  Visuals/Beacon.cs        client-drawn column; gated on a real GPU    task 3
   Voice/HuginVoice.cs      optional Raven static texts                 task 4
+  Systems/SoundSystem.cs   a tone carrying past visual range           task 5
 ```
 
 ---
@@ -346,10 +355,25 @@ shipping writer behaving on a real world exactly as the harness asserts.
 surviving a server restart with values intact, two worlds producing two stores in the same
 directory, and a corrupt file quarantining to `.corrupt` at error level.
 
-**3 — the beacon.** Client-drawn column at synced landmark coordinates, lit state driven by
-a real fire at the site. **Acceptance:** a player stands 400m away on a hillside and *sees*
-it. That is the whole test, and no log line substitutes for it. Shader chosen is logged —
-Valheim strips standard particle shaders and `Sprites/Default` is the first that ships.
+**3 — the beacon. VERIFIED BY EYE 2026-09-02.** A light drawn client-side at each cairn's
+crown from `LandmarkSync`'s broadcast, depending on no ZDO of the cairn's own — which is
+what lets it work at range, since at range those are not loaded.
+
+The acceptance was always "a player stands 400m away and *sees* it, and no log line
+substitutes for that". Met on a chain of **fifteen lit cairns spanning ~420m**, built by
+hand and sighted down its length: the distant beacons still read as points of light rather
+than having shrunk away. **Constant angular size is the claim the whole design rests on** —
+the glow is scaled BY RANGE so it holds its size on screen — and it is exactly the thing a
+log could never have settled.
+
+Confirmed on the client: `Beacon: using shader 'Sprites/Default'` — the same shader
+Ragnarok's Wrath landed on, so the stripped-shader lesson transfers rather than merely
+rhyming — and `Beacon: occlusion mask resolved (34817)`, layers 0, 11 and 15.
+
+**Still owed:** whether terrain actually puts a beacon out. The mask resolves, but resolving
+is not occluding, and a glow that shines through a mountain is a waypoint marker in a
+costume — the one thing house rule A forbids. `cairn beacons` reports `HIDDEN (terrain in
+the way)` per beacon, so a disagreement between it and the screen is immediately diagnostic.
 
 **4 — the voice.** Hugin speaks a landmark's name within 15m, above 30m altitude, no
 hostiles near, no event running. **Acceptance:** heard in-game, and vanilla tutorial text

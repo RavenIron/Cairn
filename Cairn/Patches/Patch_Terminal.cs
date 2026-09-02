@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using HarmonyLib;
@@ -14,9 +15,9 @@ namespace RavenIron.Cairn.Patches
     /// lowered name (decompile-verified 2026-09-01), so it overwrites its own entry and the
     /// repeat call per terminal is harmless.
     ///
-    /// Reads answer everywhere. There is nothing to mutate yet; when there is, it follows
-    /// Ragnarok's Wrath's self-gating rule — mutations run only where the store lives, and
-    /// a pure client is refused with directions rather than trusted.
+    /// Reads answer everywhere; mutations follow Ragnarok's Wrath's self-gating rule — they
+    /// run only where the store lives, and a pure client is refused with directions rather
+    /// than trusted.
     /// </summary>
     [HarmonyPatch(typeof(Terminal), "InitTerminal")]
     public static class Patch_Terminal_Cairn
@@ -32,7 +33,7 @@ namespace RavenIron.Cairn.Patches
         {
             try
             {
-                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status", Run);
+                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | save", Run);
 
                 if (_confirmed) return;
                 _confirmed = true;
@@ -115,8 +116,10 @@ namespace RavenIron.Cairn.Patches
                 string sub = args.Args.Length > 1 ? args.Args[1].ToLowerInvariant() : "help";
                 switch (sub)
                 {
-                    case "status": Status(args); return;
-                    default: Help(args); return;
+                    case "status":    Status(args); return;
+                    case "landmarks": Landmarks(args); return;
+                    case "save":      SaveNow(args); return;
+                    default:          Help(args); return;
                 }
             }
             catch (Exception ex)
@@ -128,7 +131,54 @@ namespace RavenIron.Cairn.Patches
 
         private static void Help(Terminal.ConsoleEventArgs args)
         {
-            args.Context?.AddString("cairn status  — what this process is, and what is running");
+            args.Context?.AddString("cairn status     — what this process is, and what is running");
+            args.Context?.AddString("cairn landmarks  — every landmark in the ledger");
+            args.Context?.AddString("cairn save       — flush the ledger now (authority only)");
+        }
+
+        /// <summary>
+        /// Reads answer everywhere. On a pure client the ledger is simply empty, and saying so
+        /// is more useful than refusing: "0 landmarks" plus "authority=False" is a complete
+        /// explanation, where a refusal would only be half of one.
+        /// </summary>
+        private static void Landmarks(Terminal.ConsoleEventArgs args)
+        {
+            var c = CultureInfo.InvariantCulture;
+            List<Landmark> all = LandmarkStore.Snapshot();
+
+            if (all.Count == 0)
+            {
+                args.Context?.AddString(
+                    $"cairn: no landmarks (store loaded={Persistence.IsLoaded}, " +
+                    $"authority={Cairn.IsSimulationAuthority()})");
+                return;
+            }
+
+            args.Context?.AddString($"cairn: {all.Count.ToString(c)} landmark(s)");
+            foreach (Landmark l in all)
+            {
+                args.Context?.AddString(
+                    $"  {l.Key}  \"{l.Name}\"  by {l.Author}  first seen " +
+                    new DateTime(l.FirstSeenUtcTicks, DateTimeKind.Utc).ToString("u", c));
+            }
+        }
+
+        /// <summary>
+        /// Mutations run only where the store lives. A pure client is refused with directions
+        /// rather than trusted — Ragnarok's Wrath's self-gating rule, inherited.
+        /// </summary>
+        private static void SaveNow(Terminal.ConsoleEventArgs args)
+        {
+            if (!Persistence.IsLoaded)
+            {
+                args.Context?.AddString(
+                    "cairn: no ledger on this process — the store lives on the server. " +
+                    "Type this at the server's own console, or on a listen host.");
+                return;
+            }
+
+            Persistence.Save(force: true);
+            args.Context?.AddString($"cairn: saved {LandmarkStore.Count.ToString(CultureInfo.InvariantCulture)} landmark(s).");
         }
 
         /// <summary>
@@ -151,7 +201,10 @@ namespace RavenIron.Cairn.Patches
                 $"budget {ModConfig.TickBudgetMs.Value.ToString("0.##", c)}ms/frame");
             args.Context?.AddString(
                 $"  enabled    : {ModConfig.Enabled.Value} (verbose={ModConfig.VerboseLogging.Value})");
-            args.Context?.AddString("  landmarks  : none — the ledger is task 2");
+            args.Context?.AddString(
+                $"  ledger     : {(Persistence.IsLoaded ? "loaded" : "not on this process")}, " +
+                $"{LandmarkStore.Count.ToString(c)} landmark(s)" +
+                (LandmarkStore.IsDirty ? ", unsaved changes" : ""));
         }
     }
 }

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Matches the SDK actually installed here. RollForward=LatestMajor means this keeps
+         running when the runtime moves on: the harness needs *a* modern runtime, not a
+         specific one. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RollForward>LatestMajor</RollForward>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <AssemblyName>CoreTests</AssemblyName>
+    <RootNamespace>Cairn.Tests</RootNamespace>
+    <!-- The mod targets net472 and needs Mono to run. These files' *logic* has no Unity
+         dependency, so compiled against stubs they run on any modern .NET. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Stubs.cs" />
+
+    <!--
+      THE SHIPPING SOURCE, not a copy. A harness that duplicates the logic proves nothing
+      about the logic that ships, and drifts apart from it silently.
+    -->
+    <Compile Include="..\..\Cairn\Core\LandmarkKey.cs" />
+    <Compile Include="..\..\Cairn\Core\Landmark.cs" />
+    <Compile Include="..\..\Cairn\Core\LandmarkStore.cs" />
+    <Compile Include="..\..\Cairn\Core\Persistence.cs" />
+    <Compile Include="..\..\Cairn\Config\ModConfig.cs" />
+  </ItemGroup>
+
+</Project>

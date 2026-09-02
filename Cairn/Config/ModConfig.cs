@@ -23,6 +23,7 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<bool>  Enabled;
         public static ConfigEntry<float> TickBudgetMs;
         public static ConfigEntry<bool>  VerboseLogging;
+        public static ConfigEntry<float> AutosaveIntervalSeconds;
 
         public static void Bind(ConfigFile config)
         {
@@ -41,6 +42,14 @@ namespace RavenIron.Cairn.Config
             VerboseLogging = config.Bind(
                 "1 - Core", "VerboseLogging", false,
                 "Per-tick detail. Off by default: it is loud enough to hide the lines that matter.");
+
+            AutosaveIntervalSeconds = config.Bind(
+                "1 - Core", "AutosaveIntervalSeconds", 60f,
+                new ConfigDescription(
+                    "How often the landmark ledger is written when it has changed. Time-based " +
+                    "rather than change-based on purpose: a busy world would otherwise write on " +
+                    "every sweep, and an idle one would never write at all.",
+                    new AcceptableValueRange<float>(5f, 600f)));
         }
     }
 }

@@ -15,11 +15,12 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: the skeleton is built, nothing is verified in-game.** Task 1 exists — the plugin
-loads, binds config, drives `CairnTick`, and registers the `cairn` console, which confirms
-itself by reading `Terminal.commands` back. Zero systems are registered; there is nothing
-to simulate yet. Task 0 (the fog measurement, `tools\probe\`) is still unrun, and it can
-still invalidate task 3. See **Build order** at the bottom.
+**Status: skeleton verified on a dedicated server; the landmark store is built and tested
+off-game; nothing fills it yet.** The plugin loads, binds config, drives `CairnTick`,
+registers the `cairn` console, loads and autosaves the ledger. Zero systems are registered
+— the sweep that turns signs into landmarks is the next thing to write. Task 0 (the fog
+measurement, `tools\probe\`) is still unrun, and it can still invalidate task 3. See
+**Build order** at the bottom.
 
 ---
 
@@ -27,6 +28,7 @@ still invalidate task 3. See **Build order** at the bottom.
 
 ```powershell
 .\tools\fetch-libs.ps1              # once per machine: copies game/BepInEx DLLs into libs\
+.\tools\run-tests.ps1               # off-game logic tests (net10) — run before every commit
 dotnet build .\Cairn\Cairn.csproj   # the mod
 dotnet build .\tools\probe\         # the fog probe (research only, never shipped)
 ```
@@ -54,17 +56,23 @@ sits beside it. Valheim locks the DLL while running, so close the game before co
 
 ## Layout
 
-Built (task 1):
+Built:
 
 ```
 Cairn/                     plugin (net472) — role-aware single DLL
   Cairn.cs                 entry point; role detection, Harmony, system registration
   Config/ModConfig.cs      config surface; every system gets an on/off toggle
   Core/IWorldSystem.cs     the contract every system implements
-  Core/CairnTick.cs        the ONLY Update in the mod; budgeted round-robin cursor
+  Core/CairnTick.cs        the ONLY Update in the mod; budgeted cursor + autosave
+  Core/LandmarkKey.cs      a place, to the nearest metre
+  Core/Landmark.cs         one named place; format/parse and the escaping
+  Core/LandmarkStore.cs    the ledger in memory; write-behind dirty flag
+  Core/Persistence.cs      world-scoped store on disk; atomic, fail-safe
   Patches/Patch_Terminal.cs  the `cairn` console
+tests/CoreTests/           net10 harness; compiles the REAL source against stubs
 docs/design-doc.html       source of the published design document
 tools/fetch-libs.ps1       populates libs\ from a local Valheim install
+tools/run-tests.ps1        the harness, in one command
 tools/probe/               the fog probe — research, never shipped, never referenced
 libs/                      gitignored; populated by fetch-libs.ps1
 ```
@@ -72,13 +80,10 @@ libs/                      gitignored; populated by fetch-libs.ps1
 Planned, in build order:
 
 ```
-  Core/LandmarkKey.cs, LandmarkStore.cs, Persistence.cs      task 2
-  Net/LandmarkSync.cs      server-to-client landmark push    task 2/3
-  Visuals/Beacon.cs        client-drawn column; gated on a real GPU   task 3
-  Voice/HuginVoice.cs      optional Raven static texts       task 4
-  Patches/Patch_Sign.cs    a named sign becomes a landmark   task 2
-tests/CoreTests/           net10 harness, compiles the REAL source; arrives with the
-                           first thing worth testing — the task 2 store
+  Systems/LandmarkSystem.cs  the sign sweep that FILLS the ledger      task 2, next
+  Net/LandmarkSync.cs      server-to-client landmark push              task 3
+  Visuals/Beacon.cs        client-drawn column; gated on a real GPU    task 3
+  Voice/HuginVoice.cs      optional Raven static texts                 task 4
 ```
 
 ---
@@ -246,10 +251,25 @@ entry in Known traps. It is the reason this task's acceptance is a run and not a
 **Still owed:** a client run (`role=client, authority=False`, `cairn status` answering at
 F5) and a listen host (`role=listen host, authority=True`).
 
-**2 — the ledger.** Named signs become landmarks in a world-scoped sparse store: position,
-name, author, first seen. **Acceptance:** two worlds produce two stores in the same
-directory; a store survives a restart with values intact; `.bak` rotated, no `.tmp`
-orphaned; a corrupt file quarantines to `.corrupt` and says so at error level.
+**2 — the ledger. STORE BUILT AND TESTED 2026-09-02; THE SWEEP IS NOT WRITTEN.** Landmarks
+live in a world-scoped sparse store: position (to the metre), name, author, first and last
+seen. `LandmarkStore` holds it, `Persistence` writes it, `CairnTick` loads it and autosaves,
+and `cairn landmarks` / `cairn save` read and flush it.
+
+**Off-game: 93/93**, and all four load-bearing assertions were proven to fail without their
+fix — header-by-content, the BOM, first-seen preservation, and culture-invariance. Every
+acceptance criterion below is covered by a test EXCEPT the in-game half.
+
+**Still owed:** `Systems/LandmarkSystem.cs`, the sweep that turns a named `Sign` into a
+landmark — nothing populates the ledger in-game yet, so a live run would only ever show
+zero. Ground it on `ZDOMan.GetAllZDOsWithPrefabIterative` (vanilla's own self-chunking walk,
+proven in RW's FarmingSystem) reading `ZDOVars.s_text`, `s_author` and
+`s_authorDisplayName`; sign prefab names belong in CONFIG, not code, because they are data
+about the game's content and a wrong name costs a silent zero matches.
+
+**Then the in-game acceptance:** two worlds produce two stores in the same directory; a
+store survives a restart with values intact; `.bak` rotated, no `.tmp` orphaned; a corrupt
+file quarantines to `.corrupt` and says so at error level.
 
 **3 — the beacon.** Client-drawn column at synced landmark coordinates, lit state driven by
 a real fire at the site. **Acceptance:** a player stands 400m away on a hillside and *sees*
@@ -276,7 +296,13 @@ Same as Ragnarok's Wrath, and for the same reasons:
 - **At least one serialization test round-trips through the shipping writer.** Assert on
   the bytes the mod actually wrote — hand-built fixtures agreed with each other and
   disagreed with disk for as long as they existed.
-- **Prove a new test fails without its fix.**
+- **Prove a new test fails without its fix.** It caught one on the day it was written: the
+  first culture test used `de-DE` and passed even with `Format` switched to
+  `CurrentCulture`, because every field in the record is an integer and integers render
+  identically there. It was decoration. It now runs under a hand-built culture whose
+  negative sign is U+2212 rather than ASCII hyphen — constructed rather than picked from
+  the OS, since which real locale uses which sign varies with the ICU version, and a test
+  that depends on that fails on someone else's machine for the wrong reason.
 - **A clean build proves nothing about member access.** Anything reaching into game
   internals needs one in-game run before it is done.
 - **Verify game APIs by decompile rather than assuming** — `ilspycmd`, read the body.

@@ -92,9 +92,15 @@ namespace RavenIron.Cairn.Core
                 _initialised = true;
             }
 
+            float now = Time.realtimeSinceStartup;
+
+            // Before the system-count check on purpose: the ledger can be changed by the
+            // console with no system registered at all, and an unsaved change is invisible
+            // until the next restart loses it.
+            MaybeAutosave(now);
+
             if (_systems.Count == 0) return;
 
-            float now = Time.realtimeSinceStartup;
             float budgetMs = Mathf.Clamp(ModConfig.TickBudgetMs.Value, 0.25f, 10f);
 
             _sw.Restart();
@@ -131,8 +137,28 @@ namespace RavenIron.Cairn.Core
             _sw.Stop();
         }
 
+        private static float _lastSave;
+
+        /// <summary>
+        /// Periodic write-behind. Save is a no-op when nothing is dirty, so this costs a
+        /// comparison on most passes.
+        /// </summary>
+        private static void MaybeAutosave(float now)
+        {
+            float interval = ModConfig.AutosaveIntervalSeconds.Value;
+            if (interval <= 0f) return;
+            if (now - _lastSave < interval) return;
+
+            _lastSave = now;
+            Persistence.Save();
+        }
+
         private static void InitialiseSystems()
         {
+            // Load stored landmarks before any system reads them. Never throws; a missing or
+            // corrupt store leaves an empty, usable ledger.
+            Persistence.Load();
+
             foreach (IWorldSystem system in _systems)
             {
                 try
@@ -150,11 +176,17 @@ namespace RavenIron.Cairn.Core
 
         private void OnDestroy()
         {
+            // Last chance to flush. Leaving the world, stopping the server, or unloading the
+            // plugin all land here — without this, up to one autosave interval of the ledger
+            // is lost every session, which reads as the mod randomly forgetting a landmark.
+            Persistence.Save(force: true);
+
             _systems.Clear();
             _lastRun.Clear();
             _cursor = 0;
             _initialised = false;
             _roleLogged = false;
+            _lastSave = 0f;
         }
     }
 }

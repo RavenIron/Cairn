@@ -32,7 +32,19 @@ namespace RavenIron.Cairn.Systems
     {
         public string Name => "LandmarkSystem";
         public bool Enabled => ModConfig.EnableLandmarks.Value;
-        public float IntervalSeconds => ModConfig.LandmarkIntervalSeconds.Value;
+
+        /// <summary>
+        /// Seconds between sweeping ONE prefab, derived so that a FULL ROTATION takes
+        /// `LandmarkRotationSeconds`.
+        ///
+        /// This used to be the configured value directly, which meant the interval governed
+        /// each prefab and the rotation cost scaled with how many were listed: four prefabs
+        /// at 45s was three minutes before a newly built cairn was even noticed. Latency
+        /// should not be a tax on the length of a config list. Now adding a prefab makes each
+        /// step shorter rather than the wait longer.
+        /// </summary>
+        public float IntervalSeconds =>
+            Mathf.Max(0.5f, ModConfig.LandmarkRotationSeconds.Value / Mathf.Max(1, _targets.Count));
 
         private struct Target
         {
@@ -74,7 +86,7 @@ namespace RavenIron.Cairn.Systems
             foreach (Target t in _targets) (t.IsSign ? signs : stones).Add(t.Prefab);
 
             Cairn.Log.LogInfo(
-                $"[{Name}] sweeping every {IntervalSeconds:F0}s — " +
+                $"[{Name}] sweeping every {IntervalSeconds:F1}s per prefab, {ModConfig.LandmarkRotationSeconds.Value:F0}s per rotation — " +
                 $"signs: {(signs.Count > 0 ? string.Join(", ", signs.ToArray()) : "none")}; " +
                 $"stone: {(stones.Count > 0 ? string.Join(", ", stones.ToArray()) : "none")}. " +
                 $"A pile is {ModConfig.PileMinPieces.Value}-{ModConfig.PileMaxPieces.Value} pieces " +

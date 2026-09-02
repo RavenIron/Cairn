@@ -27,7 +27,7 @@ namespace RavenIron.Cairn.Config
 
         // ---- Landmarks ------------------------------------------------------------
         public static ConfigEntry<bool>   EnableLandmarks;
-        public static ConfigEntry<float>  LandmarkIntervalSeconds;
+        public static ConfigEntry<float>  LandmarkRotationSeconds;
         public static ConfigEntry<string> SignPrefabs;
 
         // ---- Cairn piles ----------------------------------------------------------
@@ -82,12 +82,18 @@ namespace RavenIron.Cairn.Config
                 "The sweep that turns named signs into landmarks. Off leaves the ledger frozen " +
                 "at whatever it already holds.");
 
-            LandmarkIntervalSeconds = config.Bind(
-                "2 - Landmarks", "LandmarkIntervalSeconds", 45f,
+            LandmarkRotationSeconds = config.Bind(
+                "2 - Landmarks", "LandmarkRotationSeconds", 20f,
                 new ConfigDescription(
-                    "Seconds between sweeps of ONE sign prefab. 45 by default to stagger against " +
-                    "AwayFromHome's 60s full-index rescan.",
-                    new AcceptableValueRange<float>(5f, 600f)));
+                    "Seconds for a FULL rotation over every sign and stone prefab — which is " +
+                    "how long a newly built cairn can take to be noticed. Each prefab is swept " +
+                    "one at a time at rotation/count, so adding a prefab makes each step " +
+                    "shorter rather than the wait longer. It used to govern each PREFAB, which " +
+                    "made four prefabs a three-minute wait; latency should not be a tax on the " +
+                    "length of a config list. TRADE-OFF: a shorter rotation touches the ZDO " +
+                    "index more often, which is the thing AwayFromHome also scans every 60s. " +
+                    "Raise it on a heavily modded server if sweeps ever show up in a profile.",
+                    new AcceptableValueRange<float>(4f, 600f)));
 
             SignPrefabs = config.Bind(
                 "2 - Landmarks", "SignPrefabs", "sign,sign_notext",
@@ -180,7 +186,7 @@ namespace RavenIron.Cairn.Config
                 "off changes nothing the server knows, and the ledger keeps recording places.");
 
             BeaconSyncSeconds = config.Bind(
-                "4 - The light", "BeaconSyncSeconds", 15f,
+                "4 - The light", "BeaconSyncSeconds", 5f,
                 new ConfigDescription(
                     "How often the server broadcasts every lit cairn to everyone. Absolute " +
                     "snapshots, sent whether or not anything changed: a delta scheme drifts " +

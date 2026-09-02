@@ -23,9 +23,9 @@ roles, the ledger with its sweep, sign pairing, prune, unlight, drift carryover 
 migration, and the beacon itself. Off-game 156/156, and every load-bearing assertion was
 proven to fail without its fix.
 
-Two things remain unproven. **Terrain occlusion** — the mask resolves and beacons are meant
-to be hidden by a ridge, but resolving is not occluding, and a glow through a mountain is
-the waypoint marker house rule A forbids. And **task 0**, the fog measurement in
+The beacon is fully verified, occlusion included: a ridge really does put a light out. What
+remains is **the raven** — the line is offered correctly but no bird has yet been seen — and
+**task 0**, the fog measurement in
 `tools\probe\`, still unrun and now genuinely optional: it was a gate when the beacon was a
 grey plume, and a bright point at night is a different proposition. See **Build order**.
 
@@ -370,10 +370,20 @@ Confirmed on the client: `Beacon: using shader 'Sprites/Default'` — the same s
 Ragnarok's Wrath landed on, so the stripped-shader lesson transfers rather than merely
 rhyming — and `Beacon: occlusion mask resolved (34817)`, layers 0, 11 and 15.
 
-**Still owed:** whether terrain actually puts a beacon out. The mask resolves, but resolving
-is not occluding, and a glow that shines through a mountain is a waypoint marker in a
-costume — the one thing house rule A forbids. `cairn beacons` reports `HIDDEN (terrain in
-the way)` per beacon, so a disagreement between it and the screen is immediately diagnostic.
+**OCCLUSION VERIFIED 2026-09-02.** `cairn beacons`, sighted down the trail:
+
+```
+  (162, 37, -9)  129m  vis=0.00  HIDDEN (terrain in the way)
+  (255, 36, 11)  222m  vis=0.00  HIDDEN (terrain in the way)
+  (275, 38, 13)  242m  vis=1.00  lit
+  (324, 36, 20)  292m  vis=0.00  HIDDEN (terrain in the way)
+  (43, 48, -8)    10m  vis=1.00  lit
+```
+
+The proof is that it DISCRIMINATES: 242m visible while 222m and 292m are hidden. A broken
+raycast gives all-hidden or all-lit; this is the ragged pattern real ground produces. A
+beacon behind a ridge goes dark, so the mod is not the waypoint marker house rule A forbids
+— which was the one claim that would have quietly invalidated the whole design.
 
 **4 — the voice.** Hugin speaks a landmark's name within 15m, above 30m altitude, no
 hostiles near, no event running. **Acceptance:** heard in-game, and vanilla tutorial text

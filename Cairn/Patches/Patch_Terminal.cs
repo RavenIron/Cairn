@@ -273,7 +273,7 @@ namespace RavenIron.Cairn.Patches
                         ? string.Join("/", t.ToArray())
                         : "no table";
 
-                    lines.Add($"  {go.name}  [{tool}]  {DescribeCost(piece)}");
+                    lines.Add($"  {go.name}  [{tool}]  {DescribeCost(piece)}  {DescribePlacement(piece)}");
                 }
 
                 lines.Sort(StringComparer.OrdinalIgnoreCase);
@@ -335,6 +335,43 @@ namespace RavenIron.Cairn.Patches
             }
 
             return map;
+        }
+
+        /// <summary>
+        /// Placement rules, which is what decides whether a piece can be STACKED.
+        ///
+        /// A cairn is stones piled on stones. A piece that snaps to terrain can only ever be
+        /// scattered on the ground, however many of them you place - four ground-locked stones
+        /// in a four-metre circle is a scatter, not a waymark. So the flags matter as much as
+        /// the cost, and neither is guessable from a prefab name.
+        /// </summary>
+        private static string DescribePlacement(Component piece)
+        {
+            try
+            {
+                Type t = piece.GetType();
+                var flags = new List<string>(4);
+
+                if (Flag(piece, t, "m_groundPiece")) flags.Add("SNAPS-TO-GROUND");
+                if (Flag(piece, t, "m_groundOnly")) flags.Add("GROUND-ONLY");
+                if (Flag(piece, t, "m_cultivatedGroundOnly")) flags.Add("cultivated-only");
+                if (Flag(piece, t, "m_notOnFloor")) flags.Add("not-on-floor");
+                if (Flag(piece, t, "m_noInWater")) flags.Add("not-in-water");
+                if (Flag(piece, t, "m_allowAltGroundPlacement")) flags.Add("alt-ground-ok");
+                if (Flag(piece, t, "m_allowRotatedOverlap")) flags.Add("overlap-ok");
+
+                return flags.Count > 0 ? string.Join(" ", flags.ToArray()) : "free-placement";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static bool Flag(object obj, Type t, string field)
+        {
+            object v = AccessTools.Field(t, field)?.GetValue(obj);
+            return v is bool b && b;
         }
 
         /// <summary>Build cost as "item xN" pairs. Blank when it cannot be read.</summary>

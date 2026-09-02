@@ -174,6 +174,10 @@ namespace RavenIron.Cairn.Systems
 
             var seen = new HashSet<LandmarkKey>();
             var claimedSign = new bool[_signPositions.Count];
+
+            // Keys of cairns seen this rotation that no sign named. Only these can inherit a
+            // drifting cairn's history, because only these are identified by a moving crown.
+            var newUnnamedPiles = new List<LandmarkKey>(8);
             int changed = 0;
 
             float pairMeters = ModConfig.LandmarkPairMeters.Value;
@@ -196,6 +200,7 @@ namespace RavenIron.Cairn.Systems
 
                 if (LandmarkStore.Upsert(key, name, author, true, pile.Top, now)) changed++;
                 seen.Add(key);
+                if (sign < 0) newUnnamedPiles.Add(key);
             }
 
             // Named signs no pile has claimed: a place with a name and no light.
@@ -210,17 +215,37 @@ namespace RavenIron.Cairn.Systems
                 seen.Add(key);
             }
 
-            int pruned = 0;
+            int pruned = 0, carried = 0;
             if (_rotationClean)
             {
+                float drift = ModConfig.PileDriftMeters.Value;
+
                 foreach (Landmark landmark in LandmarkStore.Snapshot())
                 {
                     if (seen.Contains(landmark.Key)) continue;
+
+                    // An unnamed cairn is identified by its own crown, and a crown is a
+                    // computed centroid — add a stone and it shifts. When it shifts far enough
+                    // to round to a new key, this row is about to be pruned and its history
+                    // belongs to the row replacing it. Verified live on 2026-09-02: a cairn
+                    // drifted 0.8m, crossed a metre boundary, and was re-founded with its
+                    // FirstSeen erased.
+                    //
+                    // Named landmarks never take this path — they are keyed on a sign, and
+                    // signs do not move.
+                    if (drift > 0f && !landmark.IsNamed && landmark.HasPile)
+                    {
+                        int heir = PileDetection.NearestKey(landmark.Key, newUnnamedPiles, drift);
+                        if (heir >= 0 &&
+                            LandmarkStore.CarryHistory(newUnnamedPiles[heir], landmark.FirstSeenUtcTicks))
+                            carried++;
+                    }
+
                     if (LandmarkStore.Remove(landmark.Key)) pruned++;   // Snapshot is a copy
                 }
             }
 
-            LogRotation(piles.Count, changed, pruned);
+            LogRotation(piles.Count, changed, pruned, carried);
 
             _stones.Clear();
             _signPositions.Clear();
@@ -240,7 +265,7 @@ namespace RavenIron.Cairn.Systems
         /// the log could not say which of those it was watching. One line per rotation is not
         /// noise; an unfalsifiable quiet is.
         /// </summary>
-        private void LogRotation(int pileCount, int changed, int pruned)
+        private void LogRotation(int pileCount, int changed, int pruned, int carried)
         {
             var parts = new List<string>(_foundCounts.Count);
             int signsFound = 0, stonesFound = 0;
@@ -266,6 +291,7 @@ namespace RavenIron.Cairn.Systems
             Cairn.Log.LogInfo(
                 $"[{Name}] sweep complete ({string.Join(", ", parts.ToArray())}) — " +
                 $"{pileCount} pile(s), {LandmarkStore.Count} landmark(s), {changed} changed, {pruned} pruned" +
+                (carried > 0 ? $", {carried} history carried across a drift" : "") +
                 (_rotationClean ? "" : ", PRUNING SKIPPED (a prefab failed this rotation)") +
                 tail);
         }

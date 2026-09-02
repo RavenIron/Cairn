@@ -365,6 +365,23 @@ namespace Cairn.Tests
             Equal(-1, PileDetection.NearestSign(top, new List<Vector3> { new Vector3(40f, 5f, 40f) }, 6f),
                   "a distant sign does not name it — an unnamed cairn is still a cairn");
             Equal(-1, PileDetection.NearestSign(top, null, 6f), "no signs at all is not a crash");
+
+            // --- a drifting cairn keeps its identity ----------------------------------------
+            // Live defect, 2026-09-02: an unnamed cairn is keyed on its own crown, a crown is a
+            // computed centroid, and adding a stone moved it 0.8m — across a metre boundary,
+            // so the landmark was pruned and re-founded with its history erased.
+            var was = new LandmarkKey(52, 42, 18);
+            var candidates = new List<LandmarkKey> { new LandmarkKey(51, 42, 19), new LandmarkKey(200, 42, 200) };
+            Equal(0, PileDetection.NearestKey(was, candidates, 4f), "a cairn that drifted a metre is the same cairn");
+            Equal(-1, PileDetection.NearestKey(was, new List<LandmarkKey> { new LandmarkKey(200, 42, 200) }, 4f),
+                  "a cairn across the map is a different cairn");
+            Equal(-1, PileDetection.NearestKey(was, candidates, 0f), "zero drift inherits nothing");
+            Equal(-1, PileDetection.NearestKey(was, null, 4f), "no candidates is not a crash");
+
+            // Height is excluded on purpose: a cairn grows upward as stones are added, so Y is
+            // the axis most likely to move for the least meaningful reason.
+            Equal(0, PileDetection.NearestKey(was, new List<LandmarkKey> { new LandmarkKey(52, 99, 18) }, 4f),
+                  "a cairn that grew taller is still the same cairn");
         }
 
         // ---- store ----------------------------------------------------------------------
@@ -401,6 +418,26 @@ namespace Cairn.Tests
             Check(LandmarkStore.Remove(key), "remove reports the removal");
             Check(!LandmarkStore.Remove(key), "removing what is gone reports nothing");
             Equal(0, LandmarkStore.Count, "store is empty again");
+
+            // --- carrying history across a drift ---------------------------------------------
+            LandmarkStore.Clear();
+            var moved = new LandmarkKey(51, 42, 19);
+            LandmarkStore.Upsert(moved, "", SignReading.UnknownAuthor, true, new Vector3(51.5f, 42f, 19.3f), 5000L);
+            LandmarkStore.MarkClean();
+
+            Check(LandmarkStore.CarryHistory(moved, 1000L), "an older history is carried across");
+            LandmarkStore.TryGet(moved, out Landmark inherited);
+            Equal(1000L, inherited.FirstSeenUtcTicks, "the cairn is as old as the one it replaced");
+            Equal(5000L, inherited.LastSeenUtcTicks, "but was last seen just now");
+            Check(LandmarkStore.IsDirty, "carrying history dirties the store");
+
+            Check(!LandmarkStore.CarryHistory(moved, 9000L),
+                  "a LATER history is refused — a landmark cannot be made younger");
+            LandmarkStore.TryGet(moved, out inherited);
+            Equal(1000L, inherited.FirstSeenUtcTicks, "and the older date survives the attempt");
+
+            Check(!LandmarkStore.CarryHistory(new LandmarkKey(9, 9, 9), 1L), "carrying to nothing is refused");
+            Check(!LandmarkStore.CarryHistory(moved, 0L), "a zero history is refused");
 
             LandmarkStore.Clear();
             LandmarkStore.Upsert(new LandmarkKey(1, 1, 1), "A", "host", 1L);

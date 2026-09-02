@@ -37,6 +37,7 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<int>    PileMaxPieces;
         public static ConfigEntry<float>  PileMaxExtentMeters;
         public static ConfigEntry<float>  LandmarkPairMeters;
+        public static ConfigEntry<float>  PileDriftMeters;
         public static ConfigEntry<int>    StonePileStoneCost;
 
         public static void Bind(ConfigFile config)
@@ -133,6 +134,19 @@ namespace RavenIron.Cairn.Config
                     "XZ-planar: a sign set into a cairn's flank sits metres below its crown, and " +
                     "a 3D check would put it out of reach for no reason a player could see.",
                     new AcceptableValueRange<float>(1f, 30f)));
+
+            PileDriftMeters = config.Bind(
+                "3 - Cairn piles", "PileDriftMeters", 4f,
+                new ConfigDescription(
+                    "How far an UNNAMED cairn's crown may move between sweeps and still be the " +
+                    "same cairn. A crown is a computed centroid, so adding a stone shifts it — " +
+                    "and on 2026-09-02 a live cairn drifted 0.8m, crossed a metre boundary, and " +
+                    "was pruned and re-founded with its history erased. Within this distance the " +
+                    "old FirstSeen follows the cairn to its new key instead. Defaults to the " +
+                    "footprint limit: a cairn that moved less than its own width has not become " +
+                    "a different place. Named cairns never need this — they are keyed on a sign, " +
+                    "and signs do not move.",
+                    new AcceptableValueRange<float>(0f, 20f)));
 
             StonePileStoneCost = config.Bind(
                 "3 - Cairn piles", "StonePileStoneCost", 0,

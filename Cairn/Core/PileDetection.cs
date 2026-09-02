@@ -152,6 +152,43 @@ namespace RavenIron.Cairn.Core
             return best;
         }
 
+        /// <summary>
+        /// The nearest candidate key to <paramref name="key"/>, within reach. Returns -1 when
+        /// nothing is close enough.
+        ///
+        /// This exists because an UNNAMED cairn is identified by its own crown, and a crown is
+        /// a computed centroid — add a stone and it shifts. On 2026-09-02 a live cairn's crown
+        /// moved 0.8m, crossed a metre boundary, and the landmark was pruned and re-founded
+        /// with a fresh history. A cairn that moved less than its own footprint has not become
+        /// a different place, so its history follows it across.
+        ///
+        /// XZ-planar, like every other distance in this mod: a cairn grows upward as stones
+        /// are added, and height is the axis most likely to move for the least meaningful
+        /// reason.
+        /// </summary>
+        public static int NearestKey(LandmarkKey key, IList<LandmarkKey> candidates, float withinMeters)
+        {
+            if (candidates == null || candidates.Count == 0) return -1;
+
+            int best = -1;
+            float bestSq = withinMeters * withinMeters;
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                float dx = candidates[i].X - key.X;
+                float dz = candidates[i].Z - key.Z;
+                float sq = dx * dx + dz * dz;
+
+                if (sq <= bestSq)
+                {
+                    bestSq = sq;
+                    best = i;
+                }
+            }
+
+            return best;
+        }
+
         private static long CellKey(Vector3 p, float cell)
         {
             long cx = (long)Math.Floor(p.x / cell);

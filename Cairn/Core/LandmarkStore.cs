@@ -86,6 +86,25 @@ namespace RavenIron.Cairn.Core
             return dx * dx + dy * dy + dz * dz > 0.01f;   // 10 cm
         }
 
+        /// <summary>
+        /// Give a landmark an older history than the one it was founded with.
+        ///
+        /// Used when an unnamed cairn's crown drifts far enough to round to a new key: the old
+        /// row is about to be pruned, and its FirstSeen belongs to the row replacing it. Only
+        /// ever moves the date EARLIER — a landmark cannot be made younger, and a carryover
+        /// that tried to would be a bug wearing a helpful face.
+        /// </summary>
+        public static bool CarryHistory(LandmarkKey key, long earlierFirstSeenUtcTicks)
+        {
+            if (earlierFirstSeenUtcTicks <= 0) return false;
+            if (!_landmarks.TryGetValue(key, out Landmark landmark)) return false;
+            if (earlierFirstSeenUtcTicks >= landmark.FirstSeenUtcTicks) return false;
+
+            landmark.FirstSeenUtcTicks = earlierFirstSeenUtcTicks;
+            _dirty = true;
+            return true;
+        }
+
         /// <summary>Restore a landmark verbatim, preserving its stored timestamps. Load only.</summary>
         public static void Put(Landmark landmark)
         {

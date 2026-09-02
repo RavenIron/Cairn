@@ -69,11 +69,12 @@ namespace RavenIron.Cairn.Config
                     new AcceptableValueRange<float>(5f, 600f)));
 
             SignPrefabs = config.Bind(
-                "2 - Landmarks", "SignPrefabs", "sign",
+                "2 - Landmarks", "SignPrefabs", "sign,sign_notext",
                 "Comma-separated prefab names treated as signs. CONFIG rather than code because " +
                 "these are data about the game's content: they drift with game patches and modded " +
                 "pieces, and a wrong name costs a silent zero matches. The first sweep of each " +
-                "session logs its per-prefab counts so a wrong name is visible in the log.");
+                "session logs its per-prefab counts so a wrong name is visible in the log. " +
+                "Both defaults were confirmed against real world saves by prefab-hash search.");
         }
     }
 }

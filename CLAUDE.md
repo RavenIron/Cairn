@@ -267,11 +267,22 @@ only when a rotation completes CLEANLY: a sweep that threw halfway has not prove
 landmark is gone, and deleting on incomplete evidence is how a ledger quietly empties
 itself. `SignReading` holds the accept/reject rule and is covered off-game.
 
-**⚠ THE DEFAULT `SignPrefabs` VALUE IS `"sign"` AND IS UNVERIFIED.** Nobody has confirmed
-that is Valheim's actual sign prefab name, and a wrong name costs a silent zero matches —
-the exact failure this codebase keeps paying for. That is why the first completed rotation
-of every session logs its per-prefab counts unconditionally and says so in plain words when
-it found nothing. **Read that line on the first live run before believing anything else.**
+**The `SignPrefabs` default is `"sign,sign_notext"`, confirmed offline 2026-09-02.** Prefab
+names live in asset bundles, not the assemblies, so they cannot be decompiled — but a ZDO
+stores its prefab as `GetStableHashCode(name)`, and a world save stores ZDOs. Computing
+those hashes and searching two real saves for the 4-byte value found **both** `sign` and
+`sign_notext` present, and found nothing for `wood_sign`, `piece_sign` or `itemstand`.
+`piece_workbench` was the control and appears in both saves; expected random collisions
+across all sixteen trials are about 0.01, so a hit means the name is real.
+
+**Do NOT read the occurrence counts as object counts** — `piece_workbench` returned 1 and 2
+in worlds that certainly hold more than that, so the save format does not store one raw
+prefab int per ZDO the way a naive read assumes. The search proves a name EXISTS. It proves
+nothing about how many.
+
+A wrong or missing prefab name still costs a silent zero matches, which is why the first
+completed rotation of every session logs its per-prefab counts unconditionally and says so
+in plain words when it found nothing. **Read that line first on any live run.**
 
 **In-game acceptance, still owed:** build and name a sign, watch it appear in
 `cairn landmarks`; break it and watch a completed rotation prune it; two worlds produce two

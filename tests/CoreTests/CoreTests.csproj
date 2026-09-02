@@ -28,6 +28,7 @@
     <Compile Include="..\..\Cairn\Core\LandmarkStore.cs" />
     <Compile Include="..\..\Cairn\Core\SignReading.cs" />
     <Compile Include="..\..\Cairn\Core\PileDetection.cs" />
+    <Compile Include="..\..\Cairn\Core\DisplayText.cs" />
     <Compile Include="..\..\Cairn\Core\Persistence.cs" />
     <Compile Include="..\..\Cairn\Config\ModConfig.cs" />
   </ItemGroup>

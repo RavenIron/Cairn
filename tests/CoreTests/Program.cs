@@ -42,6 +42,7 @@ namespace Cairn.Tests
                 EscapeTests();
                 FormatParseTests();
                 SignReadingTests();
+                DisplayTextTests();
                 PileDetectionTests();
                 StoreTests();
                 PersistenceTests();
@@ -291,6 +292,39 @@ namespace Cairn.Tests
 
             SignReading.TryRead(new string('x', Landmark.MaxNameLength + 50), "host", out name, out _);
             Equal(Landmark.MaxNameLength, name.Length, "an over-long sign is bounded before it is stored");
+        }
+
+        // ---- what the raven may say -------------------------------------------------------
+
+        private static void DisplayTextTests()
+        {
+            Section("DisplayText");
+
+            // The moderation question, answered: storage stays faithful, the display strips.
+            Equal("Home", DisplayText.StripRichText("<color=red>Home</color>"), "colour tags are stripped");
+            Equal("Home", DisplayText.StripRichText("<b><i>Home</i></b>"), "nested tags are stripped");
+            Equal("Home", DisplayText.StripRichText("<size=200>Home</size>"), "size tags are stripped");
+            Equal("Two Rocks", DisplayText.StripRichText("Two Rocks"), "plain text is untouched");
+            Equal("", DisplayText.StripRichText(""), "empty stays empty");
+            Equal("", DisplayText.StripRichText(null), "null is not a crash");
+
+            // Narrow on purpose: a player's punctuation must survive being spoken.
+            Equal("<-- the ford", DisplayText.StripRichText("<-- the ford"),
+                  "an arrow is not a tag and is kept");
+            Equal("a < b", DisplayText.StripRichText("a < b"), "a lone bracket is kept");
+            Equal("cost <3 stone", DisplayText.StripRichText("cost <3 stone"), "<3 is not a tag");
+            Equal("<unclosed", DisplayText.StripRichText("<unclosed"), "an unclosed tag is kept as text");
+
+            // A tag cannot span a line break, so a two-line sign cannot smuggle one.
+            Equal("<a\nb>", DisplayText.StripRichText("<a\nb>"), "a newline means it was never a tag");
+
+            // Speech: stripped, collapsed, bounded.
+            Equal("Gull Cliff", DisplayText.ForSpeech("<color=red>Gull</color>\nCliff", 64),
+                  "a two-line coloured sign becomes one clean line");
+            Check(DisplayText.ForSpeech(new string('x', 200), 20).Length <= 21,
+                  "an enormous name is bounded before it reaches the dialogue box");
+            Check(DisplayText.ForSpeech(new string('x', 200), 20).EndsWith("…"),
+                  "and says it was cut");
         }
 
         // ---- pile detection --------------------------------------------------------------

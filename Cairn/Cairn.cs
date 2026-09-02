@@ -7,12 +7,12 @@ using RavenIron.Cairn.Core;
 namespace RavenIron.Cairn
 {
     /// <summary>
-    /// Task 0, the skeleton. It loads, it says what process it is, and it registers the
-    /// `cairn` console. Nothing else exists yet, and nothing here pretends otherwise.
+    /// The entry point. Binds config, installs Harmony, starts the tick, and adds the
+    /// client-only pieces where there is something to render.
     ///
-    /// One role-aware DLL, as in Ragnarok's Wrath: a headless server simulates, a pure
-    /// client renders, a listen host does both. The three are distinguished at runtime,
-    /// never at build time.
+    /// One role-aware DLL, as in Ragnarok's Wrath: a headless server sweeps the world and
+    /// owns the ledger, a pure client draws beacons and carries the raven's line, a listen
+    /// host does both. The three are distinguished at RUNTIME, never at build time.
     /// </summary>
     [BepInPlugin(PluginId, PluginName, PluginVersion)]
     [BepInProcess("valheim.exe")]
@@ -92,13 +92,18 @@ namespace RavenIron.Cairn
             // headless tell that survives compiling against client reference DLLs, and it is
             // decided here — before ZNet exists — so a dedicated server never even creates
             // the component.
-            if (HasRenderer) gameObject.AddComponent<Visuals.Beacon>();
+            if (HasRenderer)
+            {
+                gameObject.AddComponent<Visuals.Beacon>();
+                gameObject.AddComponent<Voice.HuginVoice>();
+            }
 
             // Proof of life. A silent success and a silent no-op are indistinguishable from
             // outside the game, so this line exists before there is anything to report.
             Log.LogInfo(
                 $"{PluginName} v{PluginVersion} loaded — renderer={HasRenderer}, " +
-                $"systems={CairnTick.SystemCount}. Nothing is simulated yet: this is the skeleton.");
+                $"systems={CairnTick.SystemCount}, " +
+                $"client pieces={(HasRenderer ? "beacons + raven" : "none (headless)")}.");
         }
 
         /// <summary>

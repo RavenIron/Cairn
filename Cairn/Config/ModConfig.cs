@@ -51,6 +51,11 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<float> BeaconHeightMeters;
         public static ConfigEntry<bool>  BeaconOcclusion;
 
+        // ---- The raven ------------------------------------------------------------
+        public static ConfigEntry<bool>  EnableRavenVoice;
+        public static ConfigEntry<float> RavenNameMeters;
+        public static ConfigEntry<int>   RavenNameMaxLength;
+
         public static void Bind(ConfigFile config)
         {
             Enabled = config.Bind(
@@ -243,6 +248,30 @@ namespace RavenIron.Cairn.Config
                 "forbids exactly that — a ridge between you and a cairn should mean you have " +
                 "to move, which is the difference between navigating and being told. Off is " +
                 "for diagnosing whether a beacon is missing or merely hidden.");
+
+            EnableRavenVoice = config.Bind(
+                "5 - The raven", "EnableRavenVoice", true,
+                "Let Hugin say the name of a named landmark you are standing in. FLAVOUR, never " +
+                "a navigation channel — vanilla refuses to land the bird below 30m of altitude, " +
+                "with a hostile within 10m, or during any world event, so it is silent exactly " +
+                "when you would most want it. Off changes nothing else.");
+
+            RavenNameMeters = config.Bind(
+                "5 - The raven", "RavenNameMeters", 12f,
+                new ConfigDescription(
+                    "How close you must stand to a NAMED landmark before the line is offered. " +
+                    "Kept inside the raven's own 15m spawn distance, or the bird would be " +
+                    "carrying a message about somewhere it cannot reach.",
+                    new AcceptableValueRange<float>(2f, 15f)));
+
+            RavenNameMaxLength = config.Bind(
+                "5 - The raven", "RavenNameMaxLength", 64,
+                new ConfigDescription(
+                    "Longest spoken name before it is cut with an ellipsis. Rich text is always " +
+                    "stripped before speaking — storage stays faithful to what the player typed, " +
+                    "the display decides what may be said, and that is the moderation question " +
+                    "the scope doc left open being answered conservatively.",
+                    new AcceptableValueRange<int>(8, 200)));
         }
     }
 }

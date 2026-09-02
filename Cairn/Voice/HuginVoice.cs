@@ -103,12 +103,27 @@ namespace RavenIron.Cairn.Voice
                 return lines;
             }
 
+            // Reported at ANY range, with the distance. "None within 12m" is a dead end: it
+            // says you are in the wrong place without saying where the right one is, and that
+            // answer cost two live round trips before it was worth fixing.
             Vector3 here = local.transform.position;
-            if (NearestNamed(here, ModConfig.RavenNameMeters.Value, out LandmarkKey k, out string n))
-                lines.Add($"  nearest named : \"{n}\" at {k} — within {ModConfig.RavenNameMeters.Value:F0}m");
+            float reach = ModConfig.RavenNameMeters.Value;
+
+            if (NearestNamed(here, float.MaxValue, out LandmarkKey k, out string n))
+            {
+                float dx = k.X - here.x, dz = k.Z - here.z;
+                float dist = Mathf.Sqrt(dx * dx + dz * dz);
+
+                lines.Add($"  nearest named : \"{n}\" at {k} — {dist:F0}m away" +
+                          (dist <= reach
+                              ? $", inside the {reach:F0}m reach"
+                              : $" — WALK {(dist - reach):F0}m CLOSER to hear it"));
+            }
             else
-                lines.Add($"  nearest named : none within {ModConfig.RavenNameMeters.Value:F0}m " +
-                          "(unnamed cairns never trigger the voice)");
+            {
+                lines.Add("  nearest named : none anywhere in this world. Unnamed cairns never " +
+                          "trigger the voice — put a sign within 6m of one and name it.");
+            }
 
             lines.Add($"  your altitude : {here.y:F0}m " +
                       (here.y > 30f ? "(above the raven's 30m floor)" : "(BELOW the 30m floor — it cannot land)"));

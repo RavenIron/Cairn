@@ -48,7 +48,16 @@ namespace RavenIron.Cairn.Systems
         /// </summary>
         private readonly Dictionary<LandmarkKey, Reading> _seen = new Dictionary<LandmarkKey, Reading>(64);
 
-        private readonly Dictionary<string, int> _counts = new Dictionary<string, int>(4);
+        /// <summary>
+        /// Per prefab: how many ZDOs the walk RETURNED, and how many became landmarks.
+        ///
+        /// Both numbers, because one is not enough. The first version logged only the
+        /// accepted count, so `sign:0` could mean "no sign ZDOs exist" or "sign ZDOs exist
+        /// and every one was rejected as unnamed" — two completely different diagnoses
+        /// wearing the same face. That ambiguity cost a live test session on 2026-09-02.
+        /// </summary>
+        private readonly Dictionary<string, int> _foundCounts = new Dictionary<string, int>(4);
+        private readonly Dictionary<string, int> _namedCounts = new Dictionary<string, int>(4);
 
         /// <summary>
         /// False once any prefab in this rotation failed. Pruning is skipped for an unclean
@@ -104,10 +113,12 @@ namespace RavenIron.Cairn.Systems
             }
 
             int accepted = 0;
+            int valid = 0;
             for (int i = 0; i < _found.Count; i++)
             {
                 ZDO zdo = _found[i];
                 if (zdo == null || !zdo.IsValid()) continue;
+                valid++;
 
                 string rawText = zdo.GetString(ZDOVars.s_text, "");
                 string rawAuthor = zdo.GetString(ZDOVars.s_author, "");
@@ -120,7 +131,8 @@ namespace RavenIron.Cairn.Systems
                 accepted++;
             }
 
-            _counts[prefab] = accepted;
+            _foundCounts[prefab] = valid;
+            _namedCounts[prefab] = accepted;
 
             _found.Clear();
             _sweepIndex = 0;
@@ -161,12 +173,23 @@ namespace RavenIron.Cairn.Systems
             bool interesting = changed > 0 || pruned > 0 || !_firstRotationLogged;
             if (interesting || ModConfig.VerboseLogging.Value)
             {
-                var parts = new List<string>(_counts.Count);
-                foreach (KeyValuePair<string, int> kv in _counts) parts.Add($"{kv.Key}:{kv.Value}");
+                var parts = new List<string>(_foundCounts.Count);
+                int foundTotal = 0;
+                foreach (KeyValuePair<string, int> kv in _foundCounts)
+                {
+                    _namedCounts.TryGetValue(kv.Key, out int named);
+                    parts.Add($"{kv.Key} found={kv.Value} named={named}");
+                    foundTotal += kv.Value;
+                }
 
-                string tail = _seen.Count == 0
-                    ? " — no named signs found: either this world has none, or SignPrefabs names the wrong prefab"
-                    : "";
+                // The two zero cases mean opposite things and must never share a message.
+                string tail = "";
+                if (foundTotal == 0)
+                    tail = " — NO SIGN OBJECTS AT ALL: either this world has none, or every " +
+                           "SignPrefabs name is wrong. Check with `cairn prefabs sign`.";
+                else if (_seen.Count == 0)
+                    tail = " — sign objects exist but none carry text: the prefab names are right " +
+                           "and nothing has been written on them.";
 
                 Cairn.Log.LogInfo(
                     $"[{Name}] sweep complete ({string.Join(", ", parts)}) — " +
@@ -177,7 +200,8 @@ namespace RavenIron.Cairn.Systems
 
             _firstRotationLogged = true;
             _seen.Clear();
-            _counts.Clear();
+            _foundCounts.Clear();
+            _namedCounts.Clear();
             _rotationClean = true;
         }
     }

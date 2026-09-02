@@ -199,6 +199,14 @@ inferred from the shape of an API.
 - **`Sign` caps text at `m_characterLimit = 50`**, stores it in the ZDO with a revision
   counter, and captures the author as a `PlatformUserID`. Name length is not ours to
   choose.
+- **A `spawn`ed sign has no structural support and destroys itself within seconds.** This
+  is vanilla building integrity, not a mod interaction, and it burned a whole live test
+  session on 2026-09-02: the sign was placed, the sweep ran, and `found=0` was reported —
+  a completely honest answer about a world that no longer contained a sign. **To test the
+  sweep, build a real supported structure and attach the sign to it** (`devcommands` then
+  `nocost`, then build with the hammer so normal placement rules apply). Never conclude
+  anything from a sweep over spawned pieces without first confirming they are still
+  standing.
 - **`Utils.GetMainCamera()` is a frame-cached `Camera.main`** — the main camera is tagged,
   so client-side code needs no game reference to reach it.
 - **`Terminal.commands` is `public static` in the publicized assembly and PRIVATE at
@@ -267,22 +275,27 @@ only when a rotation completes CLEANLY: a sweep that threw halfway has not prove
 landmark is gone, and deleting on incomplete evidence is how a ledger quietly empties
 itself. `SignReading` holds the accept/reject rule and is covered off-game.
 
-**The `SignPrefabs` default is `"sign,sign_notext"`, confirmed offline 2026-09-02.** Prefab
-names live in asset bundles, not the assemblies, so they cannot be decompiled — but a ZDO
-stores its prefab as `GetStableHashCode(name)`, and a world save stores ZDOs. Computing
-those hashes and searching two real saves for the 4-byte value found **both** `sign` and
-`sign_notext` present, and found nothing for `wood_sign`, `piece_sign` or `itemstand`.
-`piece_workbench` was the control and appears in both saves; expected random collisions
-across all sixteen trials are about 0.01, so a hit means the name is real.
+**⚠ THE `SignPrefabs` DEFAULT `"sign,sign_notext"` IS A GUESS AND REMAINS UNVERIFIED.**
+Prefab names live in asset bundles, not the assemblies, so they cannot be decompiled. Run
+**`cairn prefabs sign`** in-game — it reads the loaded `ZNetScene`'s own prefab list, which
+is the only authority — and set the config from what it says.
 
-**Do NOT read the occurrence counts as object counts** — `piece_workbench` returned 1 and 2
-in worlds that certainly hold more than that, so the save format does not store one raw
-prefab int per ZDO the way a naive read assumes. The search proves a name EXISTS. It proves
-nothing about how many.
+**A retracted measurement, kept because the mistake is the lesson.** On 2026-09-02 these
+names were "confirmed" by computing `GetStableHashCode` for each candidate and searching
+real world saves for the 4-byte value: `sign` and `sign_notext` both appeared, the three
+other guesses did not, and `piece_workbench` appeared as a control. It was wrong. Re-run
+against a freshly saved test world, the SAME control returned **zero**, and no plain text
+appeared in that file either — the save format defeats raw byte scanning, so the original
+hits were never prefab data. The tell was there in the first run and was rationalised away:
+`piece_workbench` returned 1 and 2 in worlds that certainly hold more. **A control that
+disagrees with itself between two files has failed, whatever the other rows say.**
 
-A wrong or missing prefab name still costs a silent zero matches, which is why the first
-completed rotation of every session logs its per-prefab counts unconditionally and says so
-in plain words when it found nothing. **Read that line first on any live run.**
+A wrong or missing prefab name costs a silent zero matches, which is why the first completed
+rotation of every session logs its per-prefab counts unconditionally. **Read that line first
+on any live run**, and note it distinguishes the two zeroes: `found=0` means no such objects
+exist at all, while `found=N named=0` means the names are right and nothing is written on
+them. The first version logged only the accepted count and could not tell those apart, which
+cost a live session.
 
 **In-game acceptance, still owed:** build and name a sign, watch it appear in
 `cairn landmarks`; break it and watch a completed rotation prune it; two worlds produce two

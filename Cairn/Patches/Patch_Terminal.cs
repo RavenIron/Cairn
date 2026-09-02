@@ -118,6 +118,7 @@ namespace RavenIron.Cairn.Patches
                 {
                     case "status":    Status(args); return;
                     case "landmarks": Landmarks(args); return;
+                    case "prefabs":   Prefabs(args); return;
                     case "save":      SaveNow(args); return;
                     default:          Help(args); return;
                 }
@@ -131,9 +132,92 @@ namespace RavenIron.Cairn.Patches
 
         private static void Help(Terminal.ConsoleEventArgs args)
         {
-            args.Context?.AddString("cairn status     — what this process is, and what is running");
-            args.Context?.AddString("cairn landmarks  — every landmark in the ledger");
-            args.Context?.AddString("cairn save       — flush the ledger now (authority only)");
+            args.Context?.AddString("cairn status         — what this process is, and what is running");
+            args.Context?.AddString("cairn landmarks      — every landmark in the ledger");
+            args.Context?.AddString("cairn prefabs <text> — real prefab names containing <text>");
+            args.Context?.AddString("cairn save           — flush the ledger now (authority only)");
+        }
+
+        /// <summary>
+        /// Ask the GAME what its prefabs are called.
+        ///
+        /// This exists because guessing cost a whole debugging cycle. Prefab names live in
+        /// asset bundles rather than the assemblies, so they cannot be decompiled, and an
+        /// attempt to recover them by searching world saves for the stable hash produced a
+        /// confident wrong answer — the control prefab returned hits in one save and none in
+        /// another, which is the tell that the instrument, not the data, was broken. The only
+        /// authority on a prefab name is a loaded ZNetScene.
+        ///
+        /// Everything here goes through reflection, including the singleton. Naming a member
+        /// that turns out to be private at runtime is a FieldAccessException raised when this
+        /// METHOD IS COMPILED, which no try/catch inside it can catch — that is what killed
+        /// the server on 2026-09-02.
+        /// </summary>
+        private static void Prefabs(Terminal.ConsoleEventArgs args)
+        {
+            string filter = (args.Args.Length > 2 ? args.Args[2] : "sign").ToLowerInvariant();
+
+            try
+            {
+                Type sceneType = AccessTools.TypeByName("ZNetScene");
+                if (sceneType == null) { args.Context?.AddString("cairn: no ZNetScene type."); return; }
+
+                object scene = ReadSingleton(sceneType);
+                if (scene == null)
+                {
+                    args.Context?.AddString("cairn: ZNetScene is not loaded — join or start a world first.");
+                    return;
+                }
+
+                FieldInfo prefabsField = AccessTools.Field(sceneType, "m_prefabs");
+                if (prefabsField == null)
+                {
+                    args.Context?.AddString("cairn: ZNetScene has no m_prefabs — Valheim's API moved.");
+                    return;
+                }
+
+                if (!(prefabsField.GetValue(scene) is IEnumerable all))
+                {
+                    args.Context?.AddString("cairn: m_prefabs was not enumerable.");
+                    return;
+                }
+
+                var hits = new List<string>();
+                int total = 0;
+                foreach (object o in all)
+                {
+                    var go = o as UnityEngine.Object;
+                    if (go == null) continue;
+                    total++;
+                    string n = go.name;
+                    if (n != null && n.ToLowerInvariant().Contains(filter)) hits.Add(n);
+                }
+
+                hits.Sort(StringComparer.OrdinalIgnoreCase);
+                args.Context?.AddString(
+                    $"cairn: {hits.Count} of {total} prefab(s) contain \"{filter}\"");
+                foreach (string n in hits) args.Context?.AddString("  " + n);
+            }
+            catch (Exception ex)
+            {
+                args.Context?.AddString("cairn: prefab listing failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>A game singleton, however the class spells it, without naming it in our IL.</summary>
+        private static object ReadSingleton(Type t)
+        {
+            FieldInfo f = AccessTools.Field(t, "m_instance") ?? AccessTools.Field(t, "instance");
+            object v = f?.GetValue(null);
+
+            if (v == null)
+            {
+                PropertyInfo p = AccessTools.Property(t, "instance");
+                v = p?.GetValue(null, null);
+            }
+
+            if (v is UnityEngine.Object uo && uo == null) return null;   // Unity's fake null
+            return v;
         }
 
         /// <summary>

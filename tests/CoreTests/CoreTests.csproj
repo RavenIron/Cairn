@@ -29,6 +29,7 @@
     <Compile Include="..\..\Cairn\Core\SignReading.cs" />
     <Compile Include="..\..\Cairn\Core\PileDetection.cs" />
     <Compile Include="..\..\Cairn\Core\DisplayText.cs" />
+    <Compile Include="..\..\Cairn\Core\HexColour.cs" />
     <Compile Include="..\..\Cairn\Core\Persistence.cs" />
     <Compile Include="..\..\Cairn\Config\ModConfig.cs" />
   </ItemGroup>

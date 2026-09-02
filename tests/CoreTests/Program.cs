@@ -43,6 +43,7 @@ namespace Cairn.Tests
                 FormatParseTests();
                 SignReadingTests();
                 DisplayTextTests();
+                HexColourTests();
                 PileDetectionTests();
                 StoreTests();
                 PersistenceTests();
@@ -325,6 +326,43 @@ namespace Cairn.Tests
                   "an enormous name is bounded before it reaches the dialogue box");
             Check(DisplayText.ForSpeech(new string('x', 200), 20).EndsWith("…"),
                   "and says it was cut");
+        }
+
+        // ---- the beacon colour -------------------------------------------------------------
+
+        private static void HexColourTests()
+        {
+            Section("HexColour");
+
+            Check(HexColour.TryParse("FFB85A", out float r, out float g, out float b, out float a),
+                  "a plain six-digit hex parses");
+            Check(Math.Abs(r - 1f) < 0.001f, "red is full");
+            Check(Math.Abs(g - 0.722f) < 0.005f, "green is 0xB8");
+            Check(Math.Abs(b - 0.353f) < 0.005f, "blue is 0x5A");
+            Check(Math.Abs(a - 1f) < 0.001f, "alpha defaults to opaque");
+
+            Check(HexColour.TryParse("#FFB85A", out _, out _, out _, out _), "a leading hash is allowed");
+            Check(HexColour.TryParse("  #FFB85A  ", out _, out _, out _, out _), "surrounding space is allowed");
+            Check(HexColour.TryParse("ffb85a", out _, out _, out _, out _), "lower case is allowed");
+
+            // Shorthand, because people type it.
+            Check(HexColour.TryParse("F00", out r, out g, out b, out _), "three-digit shorthand parses");
+            Check(Math.Abs(r - 1f) < 0.001f && g < 0.001f && b < 0.001f, "and expands correctly");
+
+            Check(HexColour.TryParse("FFB85A80", out _, out _, out _, out a), "eight digits carry alpha");
+            Check(Math.Abs(a - 0.502f) < 0.005f, "and the alpha is read");
+
+            // The failures that matter: refusing beats painting with garbage.
+            Check(!HexColour.TryParse("", out _, out _, out _, out _), "empty is refused");
+            Check(!HexColour.TryParse(null, out _, out _, out _, out _), "null is refused");
+            Check(!HexColour.TryParse("FFBB", out _, out _, out _, out _), "four digits are refused");
+            Check(!HexColour.TryParse("GGGGGG", out _, out _, out _, out _), "non-hex letters are refused");
+            Check(!HexColour.TryParse("orange", out _, out _, out _, out _), "a colour name is refused");
+
+            // A refusal must not scribble on the caller's outputs.
+            r = 0.5f;
+            HexColour.TryParse("nonsense", out r, out _, out _, out _);
+            Check(Math.Abs(r) < 0.001f, "a refused parse zeroes rather than half-writing");
         }
 
         // ---- pile detection --------------------------------------------------------------

@@ -67,6 +67,11 @@ namespace RavenIron.Cairn.Visuals
         private int _occlusionCursor;
         private int _occlusionMask = -1;
 
+        /// <summary>Firelight, and the fallback when a configured colour will not parse.</summary>
+        private static readonly Color DefaultEmber = new Color(1f, 0.72f, 0.35f);
+        private Color _colour = DefaultEmber;
+        private string _colourText;
+
         /// <summary>The live renderer, so the console can ask it what it is doing.</summary>
         public static Beacon Instance { get; private set; }
 
@@ -220,7 +225,7 @@ namespace RavenIron.Cairn.Visuals
             float maxSize = ModConfig.BeaconMaxSizeMeters.Value;
             float fade = Mathf.Clamp01(Time.deltaTime * 4f);
 
-            Color warm = new Color(1f, 0.72f, 0.35f);   // ember, not a UI colour
+            Color warm = ConfiguredColour();
 
             foreach (KeyValuePair<LandmarkKey, Lit> kv in _lit)
             {
@@ -258,6 +263,38 @@ namespace RavenIron.Cairn.Visuals
                 c.a = lit.Visibility;
                 lit.Renderer.material.color = c;
             }
+        }
+
+        /// <summary>
+        /// The beacon's colour, from config, re-read only when the string actually changes —
+        /// parsing hex sixteen times a second for a value that almost never moves would be
+        /// silly, and caching it without noticing edits would be worse.
+        ///
+        /// A value that will not parse falls back to the ember default and says so ONCE. The
+        /// alternative is a beacon that silently draws black, which looks exactly like a
+        /// beacon that is not drawing at all.
+        /// </summary>
+        private Color ConfiguredColour()
+        {
+            string text = ModConfig.BeaconColour.Value;
+            if (text == _colourText) return _colour;
+
+            _colourText = text;
+
+            if (HexColour.TryParse(text, out float r, out float g, out float b, out float _))
+            {
+                _colour = new Color(r, g, b);
+                Cairn.Log.LogInfo($"Beacon: colour set to #{text.TrimStart('#')}.");
+            }
+            else
+            {
+                _colour = DefaultEmber;
+                Cairn.Log.LogWarning(
+                    $"Beacon: '{text}' is not a hex colour (try FFB85A or #F80). " +
+                    "Falling back to the default ember rather than drawing black.");
+            }
+
+            return _colour;
         }
 
         /// <summary>

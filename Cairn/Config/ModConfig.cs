@@ -49,7 +49,8 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<float> BeaconMinSizeMeters;
         public static ConfigEntry<float> BeaconMaxSizeMeters;
         public static ConfigEntry<float> BeaconHeightMeters;
-        public static ConfigEntry<bool>  BeaconOcclusion;
+        public static ConfigEntry<bool>   BeaconOcclusion;
+        public static ConfigEntry<string> BeaconColour;
 
         // ---- The raven ------------------------------------------------------------
         public static ConfigEntry<bool>  EnableRavenVoice;
@@ -240,6 +241,13 @@ namespace RavenIron.Cairn.Config
                 new ConfigDescription(
                     "How far above the cairn's crown the light sits.",
                     new AcceptableValueRange<float>(0f, 10f)));
+
+            BeaconColour = config.Bind(
+                "4 - The light", "BeaconColour", "FFB85A",
+                "Beacon colour as hex — RGB, RRGGBB or RRGGBBAA, with or without a leading #. " +
+                "The default is firelight. A value that will not parse falls back to that and " +
+                "says so once in the log, because a beacon silently drawing black looks exactly " +
+                "like a beacon that is not drawing at all.");
 
             BeaconOcclusion = config.Bind(
                 "4 - The light", "BeaconOcclusion", true,

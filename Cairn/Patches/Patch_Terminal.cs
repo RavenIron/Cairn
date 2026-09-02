@@ -6,6 +6,7 @@ using System.Reflection;
 using HarmonyLib;
 using RavenIron.Cairn.Config;
 using RavenIron.Cairn.Core;
+using UnityEngine;
 
 namespace RavenIron.Cairn.Patches
 {
@@ -33,7 +34,7 @@ namespace RavenIron.Cairn.Patches
         {
             try
             {
-                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | prefabs <text> | save", Run);
+                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | prefabs <text> | pieces <text> | save", Run);
 
                 if (_confirmed) return;
                 _confirmed = true;
@@ -134,6 +135,7 @@ namespace RavenIron.Cairn.Patches
                     case "status":    Status(args); return;
                     case "landmarks": Landmarks(args); return;
                     case "prefabs":   Prefabs(args); return;
+                    case "pieces":    Pieces(args); return;
                     case "save":      SaveNow(args); return;
                     default:          Help(args); return;
                 }
@@ -149,7 +151,8 @@ namespace RavenIron.Cairn.Patches
         {
             Say(args, "cairn status         — what this process is, and what is running");
             Say(args, "cairn landmarks      — every landmark in the ledger");
-            Say(args, "cairn prefabs <text> — real prefab names containing <text>");
+            Say(args, "cairn prefabs <text> — every prefab name containing <text>");
+            Say(args, "cairn pieces <text>  — only BUILDABLE pieces, with tool and cost");
             Say(args, "cairn save           — flush the ledger now (authority only)");
         }
 
@@ -216,6 +219,149 @@ namespace RavenIron.Cairn.Patches
             catch (Exception ex)
             {
                 Say(args, "cairn: prefab listing failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Only the things a player can actually BUILD, with the tool that builds them and
+        /// what they cost.
+        ///
+        /// `cairn prefabs` lists every prefab the scene knows — terrain rocks, VFX, sound
+        /// effects, location props — and only a fraction are placeable. Inferring
+        /// buildability from a prefab NAME cost three round trips in a single day, so this
+        /// asks the only things that actually decide it: does the prefab carry a `Piece`
+        /// component, and is it in some tool's `PieceTable`.
+        /// </summary>
+        private static void Pieces(Terminal.ConsoleEventArgs args)
+        {
+            string filter = (args.Args.Length > 2 ? args.Args[2] : "stone").ToLowerInvariant();
+
+            try
+            {
+                Type sceneType = AccessTools.TypeByName("ZNetScene");
+                object scene = sceneType != null ? ReadSingleton(sceneType) : null;
+                if (scene == null)
+                {
+                    Say(args, "cairn: ZNetScene is not loaded — join or start a world first.");
+                    return;
+                }
+
+                FieldInfo prefabsField = AccessTools.Field(sceneType, "m_prefabs");
+                if (!(prefabsField?.GetValue(scene) is IEnumerable all))
+                {
+                    Say(args, "cairn: could not read ZNetScene.m_prefabs — Valheim's API moved.");
+                    return;
+                }
+
+                var prefabs = new List<GameObject>();
+                foreach (object o in all) if (o is GameObject go) prefabs.Add(go);
+
+                // Which tool builds what. The TABLE decides the tool, not the piece, so this
+                // is the only way to answer "is it in the cultivator?".
+                Dictionary<GameObject, List<string>> tools = MapPiecesToTools(prefabs);
+
+                var lines = new List<string>();
+                foreach (GameObject go in prefabs)
+                {
+                    if (go == null || go.name == null) continue;
+                    if (go.name.ToLowerInvariant().IndexOf(filter, StringComparison.Ordinal) < 0) continue;
+
+                    Component piece = go.GetComponent("Piece");
+                    if (piece == null) continue;   // not buildable — the whole point of this
+
+                    string tool = tools.TryGetValue(go, out List<string> t) && t.Count > 0
+                        ? string.Join("/", t.ToArray())
+                        : "no table";
+
+                    lines.Add($"  {go.name}  [{tool}]  {DescribeCost(piece)}");
+                }
+
+                lines.Sort(StringComparer.OrdinalIgnoreCase);
+                Say(args, $"cairn: {lines.Count} BUILDABLE piece(s) containing \"{filter}\"");
+                foreach (string l in lines) Say(args, l);
+            }
+            catch (Exception ex)
+            {
+                Say(args, "cairn: piece listing failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Every build tool carries a PieceTable listing what it can place. Walked the other
+        /// way round here, so a piece can name its tool.
+        /// </summary>
+        private static Dictionary<GameObject, List<string>> MapPiecesToTools(List<GameObject> prefabs)
+        {
+            var map = new Dictionary<GameObject, List<string>>();
+
+            foreach (GameObject go in prefabs)
+            {
+                if (go == null) continue;
+
+                try
+                {
+                    Component drop = go.GetComponent("ItemDrop");
+                    if (drop == null) continue;
+
+                    object itemData = AccessTools.Field(drop.GetType(), "m_itemData")?.GetValue(drop);
+                    object shared = itemData != null
+                        ? AccessTools.Field(itemData.GetType(), "m_shared")?.GetValue(itemData)
+                        : null;
+                    object table = shared != null
+                        ? AccessTools.Field(shared.GetType(), "m_buildPieces")?.GetValue(shared)
+                        : null;
+                    if (table == null) continue;   // not a build tool
+
+                    if (!(AccessTools.Field(table.GetType(), "m_pieces")?.GetValue(table) is IEnumerable pieces))
+                        continue;
+
+                    foreach (object p in pieces)
+                    {
+                        var piece = p as GameObject;
+                        if (piece == null) continue;
+
+                        if (!map.TryGetValue(piece, out List<string> list))
+                        {
+                            list = new List<string>(2);
+                            map[piece] = list;
+                        }
+                        if (!list.Contains(go.name)) list.Add(go.name);
+                    }
+                }
+                catch
+                {
+                    // One malformed tool must not cost the whole listing.
+                }
+            }
+
+            return map;
+        }
+
+        /// <summary>Build cost as "item xN" pairs. Blank when it cannot be read.</summary>
+        private static string DescribeCost(Component piece)
+        {
+            try
+            {
+                if (!(AccessTools.Field(piece.GetType(), "m_resources")?.GetValue(piece) is IEnumerable reqs))
+                    return "";
+
+                var parts = new List<string>(3);
+                foreach (object req in reqs)
+                {
+                    if (req == null) continue;
+
+                    var item = AccessTools.Field(req.GetType(), "m_resItem")?.GetValue(req) as Component;
+                    object amount = AccessTools.Field(req.GetType(), "m_amount")?.GetValue(req);
+                    if (item == null || item.gameObject == null || amount == null) continue;
+
+                    parts.Add($"{item.gameObject.name} x{amount}");
+                }
+
+                return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "free";
+            }
+            catch
+            {
+                return "";
             }
         }
 

@@ -67,6 +67,45 @@ namespace RavenIron.Cairn.Visuals
         private int _occlusionCursor;
         private int _occlusionMask = -1;
 
+        /// <summary>The live renderer, so the console can ask it what it is doing.</summary>
+        public static Beacon Instance { get; private set; }
+
+        private void Awake() => Instance = this;
+
+        /// <summary>
+        /// Why is that cairn dark? A beacon can be absent for four different reasons — never
+        /// synced, out of range, occluded, or the renderer never started — and from outside
+        /// they look identical. This says which, per beacon, in the game.
+        /// </summary>
+        public List<string> Describe()
+        {
+            var lines = new List<string>();
+
+            if (_failed) { lines.Add("  renderer DISABLED after an error — see the log"); return lines; }
+            if (_material == null) lines.Add("  (no material built yet — nothing has been drawn)");
+
+            Camera cam = Camera.main;
+            Vector3 camPos = cam != null ? cam.transform.position : Vector3.zero;
+            float maxDist = ModConfig.BeaconMaxDistanceMeters.Value;
+
+            foreach (KeyValuePair<LandmarkKey, Lit> kv in _lit)
+            {
+                Lit lit = kv.Value;
+                float dist = cam != null ? Vector3.Distance(camPos, lit.Position) : -1f;
+
+                string why =
+                    lit.Blocked ? "HIDDEN (terrain in the way)" :
+                    dist > maxDist ? $"OUT OF RANGE (>{maxDist:F0}m)" :
+                    lit.Visibility > 0.01f ? "lit" : "fading";
+
+                lines.Add(
+                    $"  {kv.Key}  {dist:F0}m  vis={lit.Visibility:F2}  {why}");
+            }
+
+            if (_lit.Count == 0) lines.Add("  no beacons known — nothing has been synced to this client");
+            return lines;
+        }
+
         private void Update()
         {
             if (_failed) return;

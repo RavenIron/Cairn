@@ -136,6 +136,7 @@ namespace RavenIron.Cairn.Patches
                     case "landmarks": Landmarks(args); return;
                     case "prefabs":   Prefabs(args); return;
                     case "pieces":    Pieces(args); return;
+                    case "beacons":   Beacons(args); return;
                     case "save":      SaveNow(args); return;
                     default:          Help(args); return;
                 }
@@ -153,6 +154,7 @@ namespace RavenIron.Cairn.Patches
             Say(args, "cairn landmarks      — every landmark in the ledger");
             Say(args, "cairn prefabs <text> — every prefab name containing <text>");
             Say(args, "cairn pieces <text>  — only BUILDABLE pieces, with tool and cost");
+            Say(args, "cairn beacons        — every light this client knows, and why it is dark");
             Say(args, "cairn save           — flush the ledger now (authority only)");
         }
 
@@ -400,6 +402,31 @@ namespace RavenIron.Cairn.Patches
             {
                 return "";
             }
+        }
+
+        /// <summary>
+        /// What the renderer is actually doing. A beacon can be absent for four different
+        /// reasons - never synced, out of range, occluded, or the renderer never started - and
+        /// from outside the game they look identical.
+        /// </summary>
+        private static void Beacons(Terminal.ConsoleEventArgs args)
+        {
+            if (!Cairn.HasRenderer)
+            {
+                Say(args, "cairn: no renderer on this process — beacons are drawn client-side.");
+                return;
+            }
+
+            Visuals.Beacon beacon = Visuals.Beacon.Instance;
+            if (beacon == null)
+            {
+                Say(args, "cairn: the beacon renderer was never created. Is EnableBeacons off?");
+                return;
+            }
+
+            List<string> lines = beacon.Describe();
+            Say(args, $"cairn: {lines.Count} beacon line(s), occlusion={ModConfig.BeaconOcclusion.Value}");
+            foreach (string l in lines) Say(args, l);
         }
 
         /// <summary>A game singleton, however the class spells it, without naming it in our IL.</summary>

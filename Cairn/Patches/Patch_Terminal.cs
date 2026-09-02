@@ -34,7 +34,7 @@ namespace RavenIron.Cairn.Patches
         {
             try
             {
-                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | prefabs <text> | pieces <text> | save", Run);
+                new Terminal.ConsoleCommand("cairn", "Cairn: status | landmarks | prefabs | pieces | beacons | raven | save", Run);
 
                 if (_confirmed) return;
                 _confirmed = true;
@@ -137,6 +137,7 @@ namespace RavenIron.Cairn.Patches
                     case "prefabs":   Prefabs(args); return;
                     case "pieces":    Pieces(args); return;
                     case "beacons":   Beacons(args); return;
+                    case "raven":     RavenVoice(args); return;
                     case "save":      SaveNow(args); return;
                     default:          Help(args); return;
                 }
@@ -155,6 +156,7 @@ namespace RavenIron.Cairn.Patches
             Say(args, "cairn prefabs <text> — every prefab name containing <text>");
             Say(args, "cairn pieces <text>  — only BUILDABLE pieces, with tool and cost");
             Say(args, "cairn beacons        — every light this client knows, and why it is dark");
+            Say(args, "cairn raven          — why Hugin is or is not saying anything");
             Say(args, "cairn save           — flush the ledger now (authority only)");
         }
 
@@ -427,6 +429,26 @@ namespace RavenIron.Cairn.Patches
             List<string> lines = beacon.Describe();
             Say(args, $"cairn: {lines.Count} beacon line(s), occlusion={ModConfig.BeaconOcclusion.Value}");
             foreach (string l in lines) Say(args, l);
+        }
+
+        /// <summary>Why the bird is quiet — four causes that look identical from in the world.</summary>
+        private static void RavenVoice(Terminal.ConsoleEventArgs args)
+        {
+            if (!Cairn.HasRenderer)
+            {
+                Say(args, "cairn: no renderer here — the raven is client-side.");
+                return;
+            }
+
+            Voice.HuginVoice voice = Voice.HuginVoice.Instance;
+            if (voice == null)
+            {
+                Say(args, "cairn: the voice component was never created. Is EnableRavenVoice off?");
+                return;
+            }
+
+            Say(args, "cairn: the raven");
+            foreach (string l in voice.Describe()) Say(args, l);
         }
 
         /// <summary>A game singleton, however the class spells it, without naming it in our IL.</summary>

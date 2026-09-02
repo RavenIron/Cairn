@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using RavenIron.Cairn.Config;
@@ -47,6 +48,69 @@ namespace RavenIron.Cairn.Voice
         private bool _holding;
         private float _sinceCheck;
         private bool _failed;
+        private bool _warnedNoBird;
+
+        /// <summary>The live voice, so the console can ask why it is quiet.</summary>
+        public static HuginVoice Instance { get; private set; }
+
+        private void Awake() => Instance = this;
+
+        /// <summary>Is Hugin actually in this scene? Null-safe against Unity's fake null.</summary>
+        public bool RavenExists()
+        {
+            if (_instanceField == null) return false;
+            return _instanceField.GetValue(null) is UnityEngine.Object o && o != null;
+        }
+
+        /// <summary>
+        /// Why is the bird quiet? Four different reasons look identical from where a player
+        /// stands: no raven in the scene at all, nothing named within reach, the line queued
+        /// but vanilla declining to land it, or reflection never resolving.
+        /// </summary>
+        public List<string> Describe()
+        {
+            var lines = new List<string>();
+
+            if (_failed) { lines.Add("  voice DISABLED after an error — see the log"); return lines; }
+            if (!ModConfig.EnableRavenVoice.Value) { lines.Add("  disabled by config"); return lines; }
+
+            bool resolved = Resolve();
+            lines.Add($"  reflection : {(resolved ? "resolved" : "NOT resolved — Valheim's API moved")}");
+            lines.Add($"  raven in scene : {RavenExists()}");
+
+            if (!RavenExists())
+                lines.Add("    ^ vanilla spawns Hugin from a GuidePoint (the start temple has one). " +
+                          "Until one loads, there is no bird to carry a line and the voice is " +
+                          "silent BY DESIGN.");
+
+            int queued = -1;
+            try
+            {
+                if (resolved && _tempTextsField.GetValue(null) is IList q) queued = q.Count;
+            }
+            catch { }
+            lines.Add($"  raven queue : {(queued < 0 ? "unreadable" : queued.ToString())} entry(s)" +
+                      (_holding ? ", including ours" : ", none of them ours"));
+
+            Player local = Player.m_localPlayer;
+            if (local == null)
+            {
+                lines.Add("  nearest named : no local player");
+                return lines;
+            }
+
+            Vector3 here = local.transform.position;
+            if (NearestNamed(here, ModConfig.RavenNameMeters.Value, out LandmarkKey k, out string n))
+                lines.Add($"  nearest named : \"{n}\" at {k} — within {ModConfig.RavenNameMeters.Value:F0}m");
+            else
+                lines.Add($"  nearest named : none within {ModConfig.RavenNameMeters.Value:F0}m " +
+                          "(unnamed cairns never trigger the voice)");
+
+            lines.Add($"  your altitude : {here.y:F0}m " +
+                      (here.y > 30f ? "(above the raven's 30m floor)" : "(BELOW the 30m floor — it cannot land)"));
+
+            return lines;
+        }
 
         private void Update()
         {
@@ -73,6 +137,19 @@ namespace RavenIron.Cairn.Voice
                 }
 
                 if (_holding && key == _spokenFor) return;   // already queued for this place
+
+                // Say it once, the first time we have something to say and there is nobody
+                // to say it. Silence here is the DESIGNED behaviour, but silence that never
+                // explains itself is indistinguishable from a broken feature.
+                if (!RavenExists() && !_warnedNoBird)
+                {
+                    _warnedNoBird = true;
+                    Cairn.Log.LogInfo(
+                        "HuginVoice: a named landmark is in reach, but there is no Raven in this " +
+                        "scene to carry the line. Vanilla spawns Hugin from a GuidePoint — the " +
+                        "start temple has one — so this world has simply never loaded one. The " +
+                        "voice stays silent by design; `cairn raven` reports this too.");
+                }
 
                 Release();
                 Offer(key, name);

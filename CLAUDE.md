@@ -339,6 +339,14 @@ Same as Ragnarok's Wrath, and for the same reasons:
 - **A clean build proves nothing about member access.** Anything reaching into game
   internals needs one in-game run before it is done.
 - **Verify game APIs by decompile rather than assuming** — `ilspycmd`, read the body.
+- **Bump the version before every deployment, not just before every release.** Minor per
+  completed task, patch for any rebuild that leaves this machine — including a DLL copied
+  to the test server. On 2026-09-02 five different builds all announced `v0.1.0`, and a live
+  diagnosis turned on knowing which one was running; the build was identified by spotting
+  new wording in a log message, which is luck rather than instrumentation. The version is
+  single-sourced from the csproj `Version` property and the C# constant is GENERATED from
+  it (`GenerateVersionConst`), so the two cannot drift — RW checks that at package time,
+  which is too late to help a test build.
 - **Ask before changing anything in the locked-decisions table.**
 
 One rule specific to this mod: **when a feature is hard to make legible, the answer is

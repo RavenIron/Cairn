@@ -19,9 +19,16 @@ namespace RavenIron.Cairn
     [BepInProcess("valheim_server.exe")]
     public class Cairn : BaseUnityPlugin
     {
-        public const string PluginId      = "com.raveniron.cairn";
-        public const string PluginName    = "Cairn";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginId   = "com.raveniron.cairn";
+        public const string PluginName = "Cairn";
+
+        /// <summary>
+        /// Generated at build time from the csproj `Version` property — see the
+        /// GenerateVersionConst target. Never edit this by hand and never hardcode it here:
+        /// two copies of a version number drift, and a boot line announcing a version the
+        /// binary is not is worse than no version at all.
+        /// </summary>
+        public const string PluginVersion = BuildVersion.Value;
 
         public static Cairn Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }

@@ -4,7 +4,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>Cairn</AssemblyName>
     <RootNamespace>RavenIron.Cairn</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -27,6 +27,31 @@
   <Target Name="CheckLibs" BeforeTargets="BeforeBuild">
     <Error Condition="!Exists('$(LibsDir)\assembly_valheim_publicized.dll')"
            Text="libs\ is missing or empty. Run tools\fetch-libs.ps1 to populate it from your Valheim install." />
+  </Target>
+
+  <!--
+    ONE source of truth for the version: the Version property above.
+
+    BepInPlugin needs a compile-time constant, so the number has to exist in C# as well -
+    and two copies of a number drift. Ragnarok's Wrath catches that drift at PACKAGE time,
+    which is late: a test build can still be deployed with a stale version in its boot line,
+    and on 2026-09-02 five different builds all announced themselves as v0.1.0 while a live
+    diagnosis depended on knowing which one was running.
+
+    Generating the constant means the two can never disagree, rather than being checked.
+  -->
+  <Target Name="GenerateVersionConst" BeforeTargets="BeforeCompile">
+    <PropertyGroup>
+      <VersionConstFile>$(IntermediateOutputPath)BuildVersion.g.cs</VersionConstFile>
+    </PropertyGroup>
+    <WriteLinesToFile
+        File="$(VersionConstFile)"
+        Lines="// Generated from the csproj Version property. Do not edit.%0Anamespace RavenIron.Cairn%0A{%0A    internal static class BuildVersion%0A    {%0A        public const string Value = &quot;$(Version)&quot;%3B%0A    }%0A}"
+        Overwrite="true"
+        WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(VersionConstFile)" />
+    </ItemGroup>
   </Target>
 
   <ItemGroup>

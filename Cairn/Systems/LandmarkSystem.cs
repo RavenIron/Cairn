@@ -170,8 +170,14 @@ namespace RavenIron.Cairn.Systems
                 }
             }
 
-            bool interesting = changed > 0 || pruned > 0 || !_firstRotationLogged;
-            if (interesting || ModConfig.VerboseLogging.Value)
+            // EVERY completed rotation logs, unconditionally.
+            //
+            // The first version logged only "interesting" rotations - something changed, or
+            // it was the first. That makes SILENCE the answer in the ordinary case, and
+            // silence cannot be told apart from a stopped tick, a disabled system, or a
+            // crashed server. On 2026-09-02 a live test sat through three quiet rotations
+            // and the log could not say which of those it was watching. One line every
+            // ninety seconds is not noise; an unfalsifiable quiet is.
             {
                 var parts = new List<string>(_foundCounts.Count);
                 int foundTotal = 0;

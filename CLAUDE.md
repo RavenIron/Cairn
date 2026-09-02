@@ -312,10 +312,33 @@ exist at all, while `found=N named=0` means the names are right and nothing is w
 them. The first version logged only the accepted count and could not tell those apart, which
 cost a live session.
 
-**In-game acceptance, still owed:** build and name a sign, watch it appear in
-`cairn landmarks`; break it and watch a completed rotation prune it; two worlds produce two
-stores in the same directory; a store survives a restart with values intact; `.bak`
-rotated, no `.tmp` orphaned; a corrupt file quarantines to `.corrupt` at error level.
+**VERIFIED IN-GAME 2026-09-02 on the dedicated server.** A supported sign named `test` was
+built by a player, and the whole chain ran unassisted:
+
+```
+[LandmarkSystem] sweep complete (sign found=1 named=1, sign_notext found=0 named=0)
+  — 1 landmark(s), 1 changed, 0 pruned
+```
+
+and one autosave later, on disk:
+
+```
+version	1
+# x	y	z	firstSeenUtcTicks	lastSeenUtcTicks	author	name
+10	49	27	639239624414309706	639239624414309706	Steam_76561198392625778	test
+```
+
+Closed by that single row: the sweep finds a real sign's ZDO; `ZDOVars.s_text` and
+`s_author` read correctly; the author stored is the PLATFORM ID and not a display name, as
+designed; the key is metre-rounded; firstSeen equals lastSeen on a first sighting; the file
+is world-scoped by uid; `.bak` rotated (65 bytes, the previous header-only file) with no
+`.tmp` orphaned; and the first bytes are `76 65 72` — "ver", **no BOM**, which is the
+shipping writer behaving on a real world exactly as the harness asserts.
+
+**Still owed:** the PRUNE path — break the sign, and a completed rotation should report
+`1 pruned`. It is the half that deletes, so it is the half to trust least. Also: a store
+surviving a server restart with values intact, two worlds producing two stores in the same
+directory, and a corrupt file quarantining to `.corrupt` at error level.
 
 **3 — the beacon.** Client-drawn column at synced landmark coordinates, lit state driven by
 a real fire at the site. **Acceptance:** a player stands 400m away on a hillside and *sees*

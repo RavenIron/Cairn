@@ -37,6 +37,7 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<int>    PileMaxPieces;
         public static ConfigEntry<float>  PileMaxExtentMeters;
         public static ConfigEntry<float>  LandmarkPairMeters;
+        public static ConfigEntry<int>    StonePileStoneCost;
 
         public static void Bind(ConfigFile config)
         {
@@ -86,7 +87,7 @@ namespace RavenIron.Cairn.Config
                 "two of 3458 prefabs contain \"sign\", and these are they.");
 
             StonePrefabs = config.Bind(
-                "3 - Cairn piles", "StonePrefabs", "stone_pile,stone_wall_1x1,stone_wall_2x1,stone_pillar",
+                "3 - Cairn piles", "StonePrefabs", "stone_pile",
                 "Comma-separated stone pieces a cairn can be built from. Names confirmed in-game; " +
                 "which of them a player can actually BUILD is a separate question, and the " +
                 "per-prefab found= counts in the sweep log answer it empirically. Deliberately " +
@@ -102,7 +103,7 @@ namespace RavenIron.Cairn.Config
                     new AcceptableValueRange<float>(0.5f, 10f)));
 
             PileMinPieces = config.Bind(
-                "3 - Cairn piles", "PileMinPieces", 3,
+                "3 - Cairn piles", "PileMinPieces", 2,
                 new ConfigDescription(
                     "Fewer stones than this is a dropped rock, not a cairn.",
                     new AcceptableValueRange<int>(2, 20)));
@@ -128,6 +129,19 @@ namespace RavenIron.Cairn.Config
                     "XZ-planar: a sign set into a cairn's flank sits metres below its crown, and " +
                     "a 3D check would put it out of reach for no reason a player could see.",
                     new AcceptableValueRange<float>(1f, 30f)));
+
+            StonePileStoneCost = config.Bind(
+                "3 - Cairn piles", "StonePileStoneCost", 10,
+                new ConfigDescription(
+                    "Stone required to build one vanilla 'stone_pile'. THIS EDITS A VANILLA " +
+                    "RECIPE — the one thing in this mod that reaches outside its own scope. At " +
+                    "vanilla's 50 a two-pile cairn costs 100 stone, which is enough that nobody " +
+                    "builds waymarks casually, and a navigation mod whose waymarks are too dear " +
+                    "to litter has failed at the only thing it does. SET TO 0 to leave the game " +
+                    "entirely alone. The change announces itself in the log with the before and " +
+                    "after, because a mod that silently halves a recipe is exactly the surprise " +
+                    "this studio dislikes in others.",
+                    new AcceptableValueRange<int>(0, 100)));
         }
     }
 }

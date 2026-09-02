@@ -96,6 +96,29 @@ namespace RavenIron.Cairn.Voice
                       "— we no longer queue there, see Offer");
             lines.Add($"  our guide point : {(_holding ? "planted" : "none")}");
 
+            // "Planted" only means WE made a GameObject. Everything below asks vanilla
+            // whether it accepted it — registration, selection, and the bird's own state.
+            // Three round trips were spent on the gap between those two claims.
+            object raven = RavenInstance();
+            if (raven != null)
+            {
+                object isMunin = AccessTools.Field(_ravenType, "m_isMunin")?.GetValue(raven);
+                lines.Add($"  this raven is : {(isMunin is bool m && m ? "MUNIN" : "Hugin")}" +
+                          " (our text must match, or it is filtered out before anything else)");
+
+                lines.Add($"  registered : {(OurTextRegistered() ? "yes — vanilla holds our static text" : "NO — RegisterStaticText never took")}");
+
+                object best = Invoke(raven, "GetBestText");
+                string verdict =
+                    best == null ? "nothing — the bird has no reason to come" :
+                    ReferenceEquals(best, _ourText) ? "OURS — vanilla has chosen our line" :
+                                                      "a VANILLA text, not ours";
+                lines.Add($"  GetBestText : {verdict}");
+
+                object away = Invoke(raven, "IsAway");
+                lines.Add($"  bird state : {(away is bool a && a ? "away (free to arrive)" : "already perched somewhere")}");
+            }
+
             Player local = Player.m_localPlayer;
             if (local == null)
             {
@@ -269,7 +292,11 @@ namespace RavenIron.Cairn.Voice
             SetField(text, "m_text", spoken);
             SetField(text, "m_topic", "");        // the name is the whole message
             SetField(text, "m_key", "");          // NEVER a tutorial key — that persists on the save
-            SetField(text, "m_munin", false);     // Hugin, not Munin
+            // MATCH the live bird. GetClosestStaticText skips any text whose m_munin differs
+            // from the raven's own m_isMunin, so hardcoding Hugin means silence in any world
+            // where the instance happens to be Munin - filtered out before distance, priority
+            // or anything else is even considered.
+            SetField(text, "m_munin", RavenIsMunin());
             SetField(text, "m_priority", 0);      // ties, and a tie is enough for a static
             SetField(text, "m_alwaysSpawn", true);
             SetField(guide, "m_text", text);
@@ -306,6 +333,50 @@ namespace RavenIron.Cairn.Voice
 
             _guidePost = null;
             _ourText = null;
+        }
+
+        /// <summary>The live Raven, or null. Unity fake-null aware.</summary>
+        private object RavenInstance()
+        {
+            if (_instanceField == null) return null;
+            object v = _instanceField.GetValue(null);
+            if (v is UnityEngine.Object o && o == null) return null;
+            return v;
+        }
+
+        /// <summary>Did vanilla actually take our static text, or did we only think so?</summary>
+        private bool OurTextRegistered()
+        {
+            try
+            {
+                if (_ourText == null) return false;
+                if (!(AccessTools.Field(_ravenType, "m_staticTexts")?.GetValue(null) is IList statics))
+                    return false;
+
+                foreach (object t in statics)
+                    if (ReferenceEquals(t, _ourText)) return true;
+
+                return false;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Is this raven Munin? Our text must carry the same flag or it is skipped.</summary>
+        private bool RavenIsMunin()
+        {
+            object raven = RavenInstance();
+            if (raven == null) return false;
+            return AccessTools.Field(_ravenType, "m_isMunin")?.GetValue(raven) is bool m && m;
+        }
+
+        private object Invoke(object target, string method)
+        {
+            try
+            {
+                MethodInfo mi = AccessTools.Method(target.GetType(), method, Type.EmptyTypes);
+                return mi?.Invoke(target, null);
+            }
+            catch { return null; }
         }
 
         private static void SetField(object target, string name, object value)

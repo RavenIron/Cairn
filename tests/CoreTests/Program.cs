@@ -176,6 +176,37 @@ namespace Cairn.Tests
             Equal("a\tb\nc\\d", nastyBack.Name, "separators in a name survive the round trip");
             Equal("auth\tor", nastyBack.Author, "separators in an author survive the round trip");
 
+            // --- v2: the pile, the light, and the first floats to reach disk ----------------
+            var lit = new Landmark(new LandmarkKey(10, 49, 27), "Two Rocks", "Steam_7656", 111L, 222L,
+                                   true, new Vector3(10.25f, 51.5f, 27.75f));
+            Check(Landmark.TryParse(lit.Format(), out Landmark litBack), "a v2 row parses");
+            Check(litBack.HasPile, "the pile flag survives");
+            Check(Math.Abs(litBack.Light.x - 10.25f) < 0.0001f, "light x round trips exactly");
+            Check(Math.Abs(litBack.Light.y - 51.5f) < 0.0001f, "light y round trips exactly");
+            Check(Math.Abs(litBack.Light.z - 27.75f) < 0.0001f, "light z round trips exactly");
+            Equal("Two Rocks", litBack.Name, "the name still comes last and still round trips");
+
+            var unlit = new Landmark(new LandmarkKey(1, 2, 3), "Plain", "host", 1L, 2L);
+            Check(Landmark.TryParse(unlit.Format(), out Landmark unlitBack), "a pileless v2 row parses");
+            Check(!unlitBack.HasPile, "no pile stays no pile");
+
+            // --- v1 migration: a live server wrote one of these on 2026-09-02 ---------------
+            const string v1 = "10\t49\t27\t639239624414309706\t639239624414309706\tSteam_76561198392625778\ttest";
+            Check(Landmark.TryParse(v1, out Landmark old), "a v1 row still parses after the format bump");
+            Equal("test", old.Name, "the v1 name is read from field 7, not field 11");
+            Equal("Steam_76561198392625778", old.Author, "the v1 author survives");
+            Equal(new LandmarkKey(10, 49, 27), old.Key, "the v1 key survives");
+            Equal(639239624414309706L, old.FirstSeenUtcTicks, "the v1 history survives");
+            Check(!old.HasPile, "a v1 row predates piles, so it has none");
+
+            // --- what makes a landmark worth keeping ---------------------------------------
+            Check(new Landmark(new LandmarkKey(0,0,0), "named", "host", 1L, 2L).IsWorthStoring,
+                  "a named place is worth storing");
+            Check(new Landmark(new LandmarkKey(0,0,0), "", "host", 1L, 2L, true, default).IsWorthStoring,
+                  "an UNNAMED lit pile is worth storing — it is a waymark, not a blank");
+            Check(!new Landmark(new LandmarkKey(0,0,0), "", "host", 1L, 2L).IsWorthStoring,
+                  "neither named nor lit is nothing at all");
+
             Check(!Landmark.TryParse("", out _), "empty line is rejected");
             Check(!Landmark.TryParse(null, out _), "null line is rejected");
             Check(!Landmark.TryParse("1\t2\t3", out _), "a short line is rejected");
@@ -202,14 +233,21 @@ namespace Cairn.Tests
                 hostile.NumberFormat.NegativeSign = "−";
                 System.Threading.Thread.CurrentThread.CurrentCulture = hostile;
 
-                var abroad = new Landmark(new LandmarkKey(-7, 8, 9), "Nordwacht", "host", 12345L, 67890L);
-                Equal("-7\t8\t9\t12345\t67890\thost\tNordwacht", abroad.Format(),
-                      "a negative coordinate writes an ASCII hyphen whatever the machine's locale");
-                Check(abroad.Format().IndexOf('−') < 0,
-                      "no locale-specific minus sign reaches disk");
-                Check(Landmark.TryParse("-7\t8\t9\t1\t2\thost\tNordwacht", out Landmark read),
-                      "a stored negative coordinate still parses under a hostile locale");
+                var abroad = new Landmark(new LandmarkKey(-7, 8, 9), "Nordwacht", "host", 12345L, 67890L,
+                                          true, new Vector3(-7.5f, 8.25f, 9f));
+                string line = abroad.Format();
+
+                Check(line.IndexOf('−') < 0, "no locale-specific minus sign reaches disk");
+                // The light is the mod's first non-integer field, so a comma-decimal machine
+                // would write "8,25" into a tab-separated file: parses at home, corrupts abroad.
+                Check(line.IndexOf(',') < 0, "no comma-decimal reaches disk");
+                Check(line.IndexOf("8.25", StringComparison.Ordinal) >= 0,
+                      "a fractional light coordinate writes a POINT whatever the machine's locale");
+
+                Check(Landmark.TryParse("-7\t8\t9\t1\t2\thost\t1\t-7.5\t8.25\t9\tNordwacht", out Landmark read),
+                      "a stored row still parses under a hostile locale");
                 Equal(-7, read.Key.X, "and parses to the right value");
+                Check(Math.Abs(read.Light.y - 8.25f) < 0.0001f, "including its fractional light");
             }
             finally
             {
@@ -407,8 +445,10 @@ namespace Cairn.Tests
             Check(!(raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF),
                   "the shipping writer emits no BOM");
             string text = Encoding.UTF8.GetString(raw);
-            Check(text.StartsWith("version\t1\n", StringComparison.Ordinal),
-                  "the file opens with a version header");
+            // Pinned to the current version deliberately, so a format bump has to be a
+            // conscious edit here rather than something a loose assertion waves through.
+            Check(text.StartsWith("version\t2\n", StringComparison.Ordinal),
+                  "the file opens with a v2 version header");
             Check(text.IndexOf("Gull\\tCliff", StringComparison.Ordinal) >= 0,
                   "a tab inside a name is escaped on disk, not written raw");
 
@@ -420,6 +460,24 @@ namespace Cairn.Tests
             Equal("76561198000000000", gull.Author, "the author is restored");
             Equal(222L, gull.FirstSeenUtcTicks, "firstSeen survives a save and load");
             Check(!LandmarkStore.IsDirty, "a freshly loaded store is clean");
+
+            // --- an UNNAMED lit pile must survive a save ----------------------------------
+            // The store's sparseness rule drops landmarks that are "nothing"; a pile with no
+            // sign is not nothing, it is a lit waymark. Before the pile existed the rule was
+            // "drop unless named", and that rule would silently delete every unnamed cairn on
+            // the first autosave.
+            LandmarkStore.Upsert(new LandmarkKey(70, 8, 70), "", SignReading.UnknownAuthor,
+                                 true, new Vector3(70.5f, 10.25f, 70.5f), 999L);
+            Persistence.Save();
+            Persistence.ResetForTests();
+            Persistence.Load();
+            Check(LandmarkStore.TryGet(new LandmarkKey(70, 8, 70), out Landmark waymark),
+                  "an unnamed lit pile is still on disk after a save and load");
+            Check(waymark != null && waymark.HasPile, "and it comes back lit");
+            Check(waymark != null && Math.Abs(waymark.Light.y - 10.25f) < 0.0001f,
+                  "with its light where it was left");
+            LandmarkStore.Remove(new LandmarkKey(70, 8, 70));
+            Persistence.Save();
 
             // --- .bak rotation -----------------------------------------------------------
             LandmarkStore.Upsert(new LandmarkKey(10, 20, 30), "Two Rocks Renamed", "host", 333L);

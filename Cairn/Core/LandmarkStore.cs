@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace RavenIron.Cairn.Core
 {
@@ -39,16 +40,28 @@ namespace RavenIron.Cairn.Core
         /// forever.
         /// </summary>
         public static bool Upsert(LandmarkKey key, string name, string author, long seenUtcTicks)
+            => Upsert(key, name, author, false, default, seenUtcTicks);
+
+        public static bool Upsert(LandmarkKey key, string name, string author,
+                                  bool hasPile, Vector3 light, long seenUtcTicks)
         {
             name = name ?? "";
             author = author ?? "";
 
             if (_landmarks.TryGetValue(key, out Landmark existing))
             {
-                bool changed = existing.Name != name || existing.Author != author;
+                // A pile appearing beside a sign that was already a landmark flips HasPile on
+                // the EXISTING row rather than making a new one, so a place that has stood for
+                // a hundred days does not become new again the day someone stacks stone on it.
+                bool changed = existing.Name != name
+                            || existing.Author != author
+                            || existing.HasPile != hasPile
+                            || Moved(existing.Light, light);
 
                 existing.Name = name;
                 existing.Author = author;
+                existing.HasPile = hasPile;
+                existing.Light = light;
                 existing.LastSeenUtcTicks = seenUtcTicks;
 
                 // LastSeen moves on every sweep and is not worth a disk write on its own; it
@@ -57,9 +70,20 @@ namespace RavenIron.Cairn.Core
                 return changed;
             }
 
-            _landmarks[key] = new Landmark(key, name, author, seenUtcTicks, seenUtcTicks);
+            _landmarks[key] = new Landmark(key, name, author, seenUtcTicks, seenUtcTicks, hasPile, light);
             _dirty = true;
             return true;
+        }
+
+        /// <summary>
+        /// Has the light moved enough to be worth a disk write? A pile's centroid shifts by
+        /// fractions of a metre as stones are added, and writing the file for a millimetre
+        /// would make every sweep dirty the store forever.
+        /// </summary>
+        private static bool Moved(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+            return dx * dx + dy * dy + dz * dz > 0.01f;   // 10 cm
         }
 
         /// <summary>Restore a landmark verbatim, preserving its stored timestamps. Load only.</summary>

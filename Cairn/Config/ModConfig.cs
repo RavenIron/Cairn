@@ -30,6 +30,14 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<float>  LandmarkIntervalSeconds;
         public static ConfigEntry<string> SignPrefabs;
 
+        // ---- Cairn piles ----------------------------------------------------------
+        public static ConfigEntry<string> StonePrefabs;
+        public static ConfigEntry<float>  PileLinkMeters;
+        public static ConfigEntry<int>    PileMinPieces;
+        public static ConfigEntry<int>    PileMaxPieces;
+        public static ConfigEntry<float>  PileMaxExtentMeters;
+        public static ConfigEntry<float>  LandmarkPairMeters;
+
         public static void Bind(ConfigFile config)
         {
             Enabled = config.Bind(
@@ -74,7 +82,52 @@ namespace RavenIron.Cairn.Config
                 "these are data about the game's content: they drift with game patches and modded " +
                 "pieces, and a wrong name costs a silent zero matches. The first sweep of each " +
                 "session logs its per-prefab counts so a wrong name is visible in the log. " +
-                "Both defaults were confirmed against real world saves by prefab-hash search.");
+                "Both defaults confirmed in-game 2026-09-02 by `cairn prefabs sign`: exactly " +
+                "two of 3458 prefabs contain \"sign\", and these are they.");
+
+            StonePrefabs = config.Bind(
+                "3 - Cairn piles", "StonePrefabs", "stone_pile,stone_wall_1x1,stone_wall_2x1,stone_pillar",
+                "Comma-separated stone pieces a cairn can be built from. Names confirmed in-game; " +
+                "which of them a player can actually BUILD is a separate question, and the " +
+                "per-prefab found= counts in the sweep log answer it empirically. Deliberately " +
+                "the SMALL pieces: a cairn is stacked, and floors and stairs would mostly feed " +
+                "the footprint rule things it is going to reject anyway.");
+
+            PileLinkMeters = config.Bind(
+                "3 - Cairn piles", "PileLinkMeters", 2.5f,
+                new ConfigDescription(
+                    "Stones within this distance of each other belong to the same pile. Linking " +
+                    "is transitive, so a chain of stones forms ONE cluster — which is what lets " +
+                    "a long wall be measured, and rejected, as a whole.",
+                    new AcceptableValueRange<float>(0.5f, 10f)));
+
+            PileMinPieces = config.Bind(
+                "3 - Cairn piles", "PileMinPieces", 3,
+                new ConfigDescription(
+                    "Fewer stones than this is a dropped rock, not a cairn.",
+                    new AcceptableValueRange<int>(2, 20)));
+
+            PileMaxPieces = config.Bind(
+                "3 - Cairn piles", "PileMaxPieces", 12,
+                new ConfigDescription(
+                    "More than this is a structure. A backstop only — the footprint rule does the " +
+                    "real work, because piece count alone can never tell a tidy wall from a waymark.",
+                    new AcceptableValueRange<int>(3, 100)));
+
+            PileMaxExtentMeters = config.Bind(
+                "3 - Cairn piles", "PileMaxExtentMeters", 4f,
+                new ConfigDescription(
+                    "THE rule. A cairn is narrow; a building is wide. Widest horizontal span a " +
+                    "cluster may cover before it is judged architecture rather than a waymark.",
+                    new AcceptableValueRange<float>(1f, 20f)));
+
+            LandmarkPairMeters = config.Bind(
+                "3 - Cairn piles", "LandmarkPairMeters", 6f,
+                new ConfigDescription(
+                    "How far from a pile a named sign may stand and still name it. Measured " +
+                    "XZ-planar: a sign set into a cairn's flank sits metres below its crown, and " +
+                    "a 3D check would put it out of reach for no reason a player could see.",
+                    new AcceptableValueRange<float>(1f, 30f)));
         }
     }
 }

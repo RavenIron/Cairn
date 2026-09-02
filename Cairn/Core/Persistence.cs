@@ -25,7 +25,7 @@ namespace RavenIron.Cairn.Core
     /// </summary>
     public static class Persistence
     {
-        private const int FormatVersion = 1;
+        private const int FormatVersion = 2;
         private const string FileStem = "cairn_landmarks";
         private const string VersionTag = "version\t";
 
@@ -286,11 +286,11 @@ namespace RavenIron.Cairn.Core
 
                 var sb = new StringBuilder(all.Count * 64 + 128);
                 sb.Append(VersionTag).Append(FormatVersion.ToString(CultureInfo.InvariantCulture)).Append('\n');
-                sb.Append("# x\ty\tz\tfirstSeenUtcTicks\tlastSeenUtcTicks\tauthor\tname\n");
+                sb.Append("# x\ty\tz\tfirstSeenUtcTicks\tlastSeenUtcTicks\tauthor\thasPile\tlightX\tlightY\tlightZ\tname\n");
 
                 foreach (Landmark landmark in all)
                 {
-                    if (!landmark.IsNamed) continue;   // sparseness, enforced at the boundary
+                    if (!landmark.IsWorthStoring) continue;   // sparseness, enforced at the boundary
                     sb.Append(landmark.Format()).Append('\n');
                 }
 

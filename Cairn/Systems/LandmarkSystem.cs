@@ -7,26 +7,26 @@ using UnityEngine;
 namespace RavenIron.Cairn.Systems
 {
     /// <summary>
-    /// The sweep: named signs become landmarks.
+    /// The sweep: stacked stone becomes a cairn, and a named sign beside it gives it a name.
     ///
-    /// Reads ZDOs rather than instantiated objects, so it sees every sign the server knows
-    /// about and not merely the ones near a player. That is the whole reason the ledger can
+    /// Reads ZDOs rather than instantiated objects, so it sees everything the server knows
+    /// about and not merely what is near a player. That is the whole reason the ledger can
     /// be complete on an empty server.
     ///
     /// THE WALK. `ZDOMan.GetAllZDOsWithPrefabIterative` is vanilla's own self-chunking
     /// traversal (decompile-verified 2026-09-02: appends matches by prefab hash, advances an
-    /// index through the sector array, and returns true once it has passed the end and
-    /// drained the outside-sector list). One WHOLE prefab is drained per tick — RW learned
-    /// that resuming one chunk per tick stretches a rotation across the better part of an
-    /// hour, and vanilla's own callers drain it in a loop within one frame. Termination is
-    /// structural: the index advances on every call until it passes the sector array.
+    /// index through the sector array, returns true once past the end and the outside-sector
+    /// list is drained). One WHOLE prefab is drained per tick — RW learned that resuming one
+    /// chunk per tick stretches a rotation across the better part of an hour, and vanilla's
+    /// own callers drain it in a loop within one frame.
     ///
-    /// SIGN PREFAB NAMES ARE CONFIG, NOT CODE. They are data about the game's content, they
-    /// drift with game patches and modded pieces, and a wrong name costs a SILENT zero
-    /// matches — which is why the first completed rotation of a session always logs its
-    /// per-prefab counts, whether or not anything was found.
+    /// A ROTATION covers every sign prefab and every stone prefab. Nothing is applied until
+    /// it completes, because a pile cannot be judged from the stone of one prefab and a sign
+    /// cannot be paired with a pile that has not been found yet.
     ///
-    /// The interval defaults to 45s to stagger against AwayFromHome's 60s full-index rescan.
+    /// PREFAB NAMES ARE CONFIG, NOT CODE. They are data about the game's content, they drift
+    /// with patches and modded pieces, and a wrong one costs a SILENT zero matches — which is
+    /// why every completed rotation logs its per-prefab counts, always.
     /// </summary>
     public class LandmarkSystem : IWorldSystem
     {
@@ -34,30 +34,27 @@ namespace RavenIron.Cairn.Systems
         public bool Enabled => ModConfig.EnableLandmarks.Value;
         public float IntervalSeconds => ModConfig.LandmarkIntervalSeconds.Value;
 
-        private string[] _signPrefabs = Array.Empty<string>();
-        private int _prefabCursor;
+        private struct Target
+        {
+            public string Prefab;
+            public bool IsSign;
+        }
+
+        private readonly List<Target> _targets = new List<Target>(8);
+        private int _cursor;
 
         // GetAllZDOsWithPrefabIterative's resume state for the prefab currently mid-walk.
         private readonly List<ZDO> _found = new List<ZDO>(64);
         private int _sweepIndex;
 
-        /// <summary>
-        /// What this rotation has seen so far, accumulated across every configured prefab and
-        /// applied only when the rotation completes. Applying per-prefab would prune every
-        /// landmark belonging to a prefab whose turn had not yet come up.
-        /// </summary>
-        private readonly Dictionary<LandmarkKey, Reading> _seen = new Dictionary<LandmarkKey, Reading>(64);
+        // Accumulated across the WHOLE rotation, applied only when it completes.
+        private readonly List<Vector3> _stones = new List<Vector3>(256);
+        private readonly List<Vector3> _signPositions = new List<Vector3>(32);
+        private readonly List<string> _signNames = new List<string>(32);
+        private readonly List<string> _signAuthors = new List<string>(32);
 
-        /// <summary>
-        /// Per prefab: how many ZDOs the walk RETURNED, and how many became landmarks.
-        ///
-        /// Both numbers, because one is not enough. The first version logged only the
-        /// accepted count, so `sign:0` could mean "no sign ZDOs exist" or "sign ZDOs exist
-        /// and every one was rejected as unnamed" — two completely different diagnoses
-        /// wearing the same face. That ambiguity cost a live test session on 2026-09-02.
-        /// </summary>
-        private readonly Dictionary<string, int> _foundCounts = new Dictionary<string, int>(4);
-        private readonly Dictionary<string, int> _namedCounts = new Dictionary<string, int>(4);
+        private readonly Dictionary<string, int> _foundCounts = new Dictionary<string, int>(8);
+        private readonly Dictionary<string, int> _keptCounts = new Dictionary<string, int>(8);
 
         /// <summary>
         /// False once any prefab in this rotation failed. Pruning is skipped for an unclean
@@ -66,96 +63,151 @@ namespace RavenIron.Cairn.Systems
         /// </summary>
         private bool _rotationClean = true;
 
-        private bool _firstRotationLogged;
-
-        private struct Reading
-        {
-            public string Name;
-            public string Author;
-        }
-
         public void Initialise()
         {
-            _signPrefabs = (ModConfig.SignPrefabs.Value ?? "")
-                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < _signPrefabs.Length; i++) _signPrefabs[i] = _signPrefabs[i].Trim();
+            _targets.Clear();
+            AddTargets(ModConfig.SignPrefabs.Value, isSign: true);
+            AddTargets(ModConfig.StonePrefabs.Value, isSign: false);
+
+            var signs = new List<string>();
+            var stones = new List<string>();
+            foreach (Target t in _targets) (t.IsSign ? signs : stones).Add(t.Prefab);
 
             Cairn.Log.LogInfo(
-                $"[{Name}] sweeping {_signPrefabs.Length} sign prefab(s) every {IntervalSeconds:F0}s: " +
-                $"{string.Join(", ", _signPrefabs)}");
+                $"[{Name}] sweeping every {IntervalSeconds:F0}s — " +
+                $"signs: {(signs.Count > 0 ? string.Join(", ", signs.ToArray()) : "none")}; " +
+                $"stone: {(stones.Count > 0 ? string.Join(", ", stones.ToArray()) : "none")}. " +
+                $"A pile is {ModConfig.PileMinPieces.Value}-{ModConfig.PileMaxPieces.Value} pieces " +
+                $"within {ModConfig.PileMaxExtentMeters.Value:F1}m of footprint; a sign names one " +
+                $"from {ModConfig.LandmarkPairMeters.Value:F0}m.");
+        }
+
+        private void AddTargets(string csv, bool isSign)
+        {
+            foreach (string raw in (csv ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string prefab = raw.Trim();
+                if (prefab.Length > 0) _targets.Add(new Target { Prefab = prefab, IsSign = isSign });
+            }
         }
 
         public void Tick(float deltaSeconds)
         {
-            if (_signPrefabs.Length == 0) return;
+            if (_targets.Count == 0) return;
 
             ZDOMan man = ZDOMan.instance;
             if (man == null) return;
 
-            string prefab = _signPrefabs[_prefabCursor];
+            Target target = _targets[_cursor];
 
             try
             {
                 bool done = false;
                 while (!done)
-                    done = man.GetAllZDOsWithPrefabIterative(prefab, _found, ref _sweepIndex);
+                    done = man.GetAllZDOsWithPrefabIterative(target.Prefab, _found, ref _sweepIndex);
             }
             catch (Exception ex)
             {
                 // Do not advance the cursor: the same prefab is retried next tick. An
                 // unrecognised prefab name does not throw — it returns no matches — so a throw
                 // here means something else, and losing the rotation is the safe response.
-                Cairn.Log.LogWarning($"[{Name}] sweep failed on '{prefab}': {ex.Message}");
+                Cairn.Log.LogWarning($"[{Name}] sweep failed on '{target.Prefab}': {ex.Message}");
                 _found.Clear();
                 _sweepIndex = 0;
                 _rotationClean = false;
                 return;
             }
 
-            int accepted = 0;
-            int valid = 0;
+            int valid = 0, kept = 0;
             for (int i = 0; i < _found.Count; i++)
             {
                 ZDO zdo = _found[i];
                 if (zdo == null || !zdo.IsValid()) continue;
                 valid++;
 
-                string rawText = zdo.GetString(ZDOVars.s_text, "");
-                string rawAuthor = zdo.GetString(ZDOVars.s_author, "");
+                if (target.IsSign)
+                {
+                    string rawText = zdo.GetString(ZDOVars.s_text, "");
+                    string rawAuthor = zdo.GetString(ZDOVars.s_author, "");
+                    if (!SignReading.TryRead(rawText, rawAuthor, out string name, out string author))
+                        continue;   // a blank sign is not a place
 
-                if (!SignReading.TryRead(rawText, rawAuthor, out string name, out string author))
-                    continue;   // a blank sign is not a place
-
-                Vector3 pos = zdo.GetPosition();
-                _seen[LandmarkKey.FromPosition(pos)] = new Reading { Name = name, Author = author };
-                accepted++;
+                    _signPositions.Add(zdo.GetPosition());
+                    _signNames.Add(name);
+                    _signAuthors.Add(author);
+                    kept++;
+                }
+                else
+                {
+                    _stones.Add(zdo.GetPosition());
+                    kept++;
+                }
             }
 
-            _foundCounts[prefab] = valid;
-            _namedCounts[prefab] = accepted;
+            _foundCounts[target.Prefab] = valid;
+            _keptCounts[target.Prefab] = kept;
 
             _found.Clear();
             _sweepIndex = 0;
 
-            _prefabCursor++;
-            if (_prefabCursor < _signPrefabs.Length) return;
+            _cursor++;
+            if (_cursor < _targets.Count) return;
 
-            _prefabCursor = 0;
+            _cursor = 0;
             CompleteRotation();
         }
 
         /// <summary>
-        /// Every configured prefab has been walked, so <see cref="_seen"/> is now the complete
-        /// set of named signs in the world — which is what makes pruning safe.
+        /// Every prefab has been walked, so what was collected is the COMPLETE picture of the
+        /// world's stone and named signs — which is what makes both pairing and pruning safe.
         /// </summary>
         private void CompleteRotation()
         {
             long now = DateTime.UtcNow.Ticks;
+
+            List<PileDetection.Pile> piles = PileDetection.Find(
+                _stones,
+                ModConfig.PileLinkMeters.Value,
+                ModConfig.PileMinPieces.Value,
+                ModConfig.PileMaxPieces.Value,
+                ModConfig.PileMaxExtentMeters.Value);
+
+            var seen = new HashSet<LandmarkKey>();
+            var claimedSign = new bool[_signPositions.Count];
             int changed = 0;
 
-            foreach (KeyValuePair<LandmarkKey, Reading> kv in _seen)
+            float pairMeters = ModConfig.LandmarkPairMeters.Value;
+
+            foreach (PileDetection.Pile pile in piles)
             {
-                if (LandmarkStore.Upsert(kv.Key, kv.Value.Name, kv.Value.Author, now)) changed++;
+                int sign = PileDetection.NearestSign(pile.Top, _signPositions, pairMeters);
+
+                // A named sign is the landmark's identity when one is in reach, so building a
+                // cairn around a sign that was ALREADY a landmark flips its light on rather
+                // than founding a second place a metre away. The sign does not move; the
+                // pile's centroid does.
+                LandmarkKey key = sign >= 0
+                    ? LandmarkKey.FromPosition(_signPositions[sign])
+                    : LandmarkKey.FromPosition(pile.Top);
+
+                string name = sign >= 0 ? _signNames[sign] : "";
+                string author = sign >= 0 ? _signAuthors[sign] : SignReading.UnknownAuthor;
+                if (sign >= 0) claimedSign[sign] = true;
+
+                if (LandmarkStore.Upsert(key, name, author, true, pile.Top, now)) changed++;
+                seen.Add(key);
+            }
+
+            // Named signs no pile has claimed: a place with a name and no light.
+            for (int i = 0; i < _signPositions.Count; i++)
+            {
+                if (claimedSign[i]) continue;
+
+                LandmarkKey key = LandmarkKey.FromPosition(_signPositions[i]);
+                if (seen.Contains(key)) continue;
+
+                if (LandmarkStore.Upsert(key, _signNames[i], _signAuthors[i], false, default, now)) changed++;
+                seen.Add(key);
             }
 
             int pruned = 0;
@@ -163,52 +215,59 @@ namespace RavenIron.Cairn.Systems
             {
                 foreach (Landmark landmark in LandmarkStore.Snapshot())
                 {
-                    if (_seen.ContainsKey(landmark.Key)) continue;
-
-                    // Snapshot() is a copy, so removing while walking it is safe.
-                    if (LandmarkStore.Remove(landmark.Key)) pruned++;
+                    if (seen.Contains(landmark.Key)) continue;
+                    if (LandmarkStore.Remove(landmark.Key)) pruned++;   // Snapshot is a copy
                 }
             }
 
-            // EVERY completed rotation logs, unconditionally.
-            //
-            // The first version logged only "interesting" rotations - something changed, or
-            // it was the first. That makes SILENCE the answer in the ordinary case, and
-            // silence cannot be told apart from a stopped tick, a disabled system, or a
-            // crashed server. On 2026-09-02 a live test sat through three quiet rotations
-            // and the log could not say which of those it was watching. One line every
-            // ninety seconds is not noise; an unfalsifiable quiet is.
-            {
-                var parts = new List<string>(_foundCounts.Count);
-                int foundTotal = 0;
-                foreach (KeyValuePair<string, int> kv in _foundCounts)
-                {
-                    _namedCounts.TryGetValue(kv.Key, out int named);
-                    parts.Add($"{kv.Key} found={kv.Value} named={named}");
-                    foundTotal += kv.Value;
-                }
+            LogRotation(piles.Count, changed, pruned);
 
-                // The two zero cases mean opposite things and must never share a message.
-                string tail = "";
-                if (foundTotal == 0)
-                    tail = " — NO SIGN OBJECTS AT ALL: either this world has none, or every " +
-                           "SignPrefabs name is wrong. Check with `cairn prefabs sign`.";
-                else if (_seen.Count == 0)
-                    tail = " — sign objects exist but none carry text: the prefab names are right " +
-                           "and nothing has been written on them.";
-
-                Cairn.Log.LogInfo(
-                    $"[{Name}] sweep complete ({string.Join(", ", parts)}) — " +
-                    $"{LandmarkStore.Count} landmark(s), {changed} changed, {pruned} pruned" +
-                    (_rotationClean ? "" : ", PRUNING SKIPPED (a prefab failed this rotation)") +
-                    tail);
-            }
-
-            _firstRotationLogged = true;
-            _seen.Clear();
+            _stones.Clear();
+            _signPositions.Clear();
+            _signNames.Clear();
+            _signAuthors.Clear();
             _foundCounts.Clear();
-            _namedCounts.Clear();
+            _keptCounts.Clear();
             _rotationClean = true;
+        }
+
+        /// <summary>
+        /// EVERY completed rotation logs, unconditionally.
+        ///
+        /// Logging only "interesting" rotations makes SILENCE the answer in the ordinary case,
+        /// and silence cannot be told apart from a stopped tick, a disabled system or a
+        /// crashed server. On 2026-09-02 a live test sat through several quiet rotations and
+        /// the log could not say which of those it was watching. One line per rotation is not
+        /// noise; an unfalsifiable quiet is.
+        /// </summary>
+        private void LogRotation(int pileCount, int changed, int pruned)
+        {
+            var parts = new List<string>(_foundCounts.Count);
+            int signsFound = 0, stonesFound = 0;
+
+            foreach (Target t in _targets)
+            {
+                _foundCounts.TryGetValue(t.Prefab, out int found);
+                _keptCounts.TryGetValue(t.Prefab, out int kept);
+                parts.Add($"{t.Prefab} found={found} kept={kept}");
+
+                if (t.IsSign) signsFound += found; else stonesFound += found;
+            }
+
+            // The zero cases mean different things and must never share a message.
+            string tail = "";
+            if (signsFound == 0 && stonesFound == 0)
+                tail = " — NOTHING FOUND AT ALL: either this world is bare, or every prefab name " +
+                       "is wrong. Check with `cairn prefabs sign` and `cairn prefabs stone`.";
+            else if (stonesFound > 0 && pileCount == 0)
+                tail = " — stone exists but none of it is shaped like a cairn: too few pieces, " +
+                       "too many, or too wide a footprint.";
+
+            Cairn.Log.LogInfo(
+                $"[{Name}] sweep complete ({string.Join(", ", parts.ToArray())}) — " +
+                $"{pileCount} pile(s), {LandmarkStore.Count} landmark(s), {changed} changed, {pruned} pruned" +
+                (_rotationClean ? "" : ", PRUNING SKIPPED (a prefab failed this rotation)") +
+                tail);
         }
     }
 }

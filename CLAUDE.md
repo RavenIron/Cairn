@@ -15,11 +15,12 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: task 2 is built end to end and tested off-game (105/105); NONE of it has been run
-in-game.** The plugin loads, binds config, drives `CairnTick`, registers the `cairn`
-console, loads and autosaves the ledger, and sweeps sign ZDOs into it. Only the task 1
-skeleton has a live run behind it. Task 0 (the fog measurement, `tools\probe\`) is still
-unrun, and it can still invalidate task 3. See **Build order** at the bottom.
+**Status: the sign half is VERIFIED LIVE; the stone half is built and tested off-game
+(143/143) but never run.** A player's named sign became a landmark on a real dedicated
+server and reached disk with its values intact. As of 0.3.0 the sweep also walks stone,
+groups it into cairns, and pairs each with the sign that names it — none of which has met a
+real world yet. Task 0 (the fog measurement, `tools\probe\`) is still unrun. See **Build
+order** at the bottom.
 
 ---
 
@@ -67,8 +68,9 @@ Cairn/                     plugin (net472) — role-aware single DLL
   Core/Landmark.cs         one named place; format/parse and the escaping
   Core/LandmarkStore.cs    the ledger in memory; write-behind dirty flag
   Core/SignReading.cs      is this sign a landmark, and what is it called
+  Core/PileDetection.cs    is this stack of stone a cairn, or a wall
   Core/Persistence.cs      world-scoped store on disk; atomic, fail-safe
-  Systems/LandmarkSystem.cs  the sweep: named signs become landmarks
+  Systems/LandmarkSystem.cs  the sweep: stone becomes cairns, signs name them
   Patches/Patch_Terminal.cs  the `cairn` console
 tests/CoreTests/           net10 harness; compiles the REAL source against stubs
 docs/design-doc.html       source of the published design document

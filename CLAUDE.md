@@ -211,6 +211,13 @@ inferred from the shape of an API.
 - **`GameCamera.m_fov = 65` and Unity's `fieldOfView` is vertical.** At 1080p a 40m column
   at 400m is ~95px tall and ~7px wide at 3m thick. Height buys legibility linearly; width
   past ~8m is wasted. Build the beacon tall, not fat.
+- **THE RAVEN IN A WORLD MAY BE MUNIN, NOT HUGIN, AND THE FILTER IS SILENT.**
+  `Raven.m_instance` is whichever of the two spawned, and `GetClosestStaticText` skips any
+  text whose `m_munin` differs from the instance's `m_isMunin` — before distance, before
+  priority, before anything. Hardcoding Hugin cost four wrong theories and most of an
+  afternoon on 2026-09-02: the world's bird was MUNIN, so a correctly registered, correctly
+  positioned line was discarded by a boolean, with every other signal reading healthy. Always
+  match the live instance. `cairn raven` reports which bird it is.
 - **`Sign` caps text at `m_characterLimit = 50`**, stores it in the ZDO with a revision
   counter, and captures the author as a `PlatformUserID`. Name length is not ours to
   choose.

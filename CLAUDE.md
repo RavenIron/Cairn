@@ -277,10 +277,23 @@ only when a rotation completes CLEANLY: a sweep that threw halfway has not prove
 landmark is gone, and deleting on incomplete evidence is how a ledger quietly empties
 itself. `SignReading` holds the accept/reject rule and is covered off-game.
 
-**⚠ THE `SignPrefabs` DEFAULT `"sign,sign_notext"` IS A GUESS AND REMAINS UNVERIFIED.**
-Prefab names live in asset bundles, not the assemblies, so they cannot be decompiled. Run
-**`cairn prefabs sign`** in-game — it reads the loaded `ZNetScene`'s own prefab list, which
-is the only authority — and set the config from what it says.
+**`SignPrefabs` = `"sign,sign_notext"` — VERIFIED IN-GAME 2026-09-02** by `cairn prefabs
+sign` against a loaded `ZNetScene`: exactly two of 3458 prefabs contain "sign", and those
+are their names.
+
+**The stone pieces, from the same run** (`cairn prefabs stone`, 103 matches, buildable ones
+picked out): `stone_pile`, `stone_wall_1x1`, `stone_wall_2x1`, `stone_wall_4x2`,
+`stone_floor`, `stone_floor_2x2`, `stone_pillar`, `stone_arch`, `stone_stair`, and
+`piece_stonecutter` as the stone workbench. `stone_pile` is named like exactly what a cairn
+is made of and is the first candidate to check. **Which of these a player can actually
+BUILD is a separate question the prefab list cannot answer** — the sweep's per-prefab
+`found=` counts settle it empirically.
+
+**The lucky-right-answer trap, worth keeping.** The retracted hash search had named `sign`
+and `sign_notext` too. It was still a broken instrument — its control failed — and landing
+on the right answer by luck is not evidence of anything. Had the retraction been skipped
+because "it turned out to be right", the same method would have been trusted for the stone
+names, where it had no chance at all.
 
 **A retracted measurement, kept because the mistake is the lesson.** On 2026-09-02 these
 names were "confirmed" by computing `GetStableHashCode` for each candidate and searching

@@ -15,9 +15,11 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: NOTHING BUILT.** This is a scope document, not a roadmap in progress. The only
-code that exists is `tools\probe\` — a research instrument that answers the one question
-the whole design hangs on. See **Build order** at the bottom.
+**Status: the skeleton is built, nothing is verified in-game.** Task 1 exists — the plugin
+loads, binds config, drives `CairnTick`, and registers the `cairn` console, which confirms
+itself by reading `Terminal.commands` back. Zero systems are registered; there is nothing
+to simulate yet. Task 0 (the fog measurement, `tools\probe\`) is still unrun, and it can
+still invalidate task 3. See **Build order** at the bottom.
 
 ---
 
@@ -25,8 +27,12 @@ the whole design hangs on. See **Build order** at the bottom.
 
 ```powershell
 .\tools\fetch-libs.ps1              # once per machine: copies game/BepInEx DLLs into libs\
+dotnet build .\Cairn\Cairn.csproj   # the mod
 dotnet build .\tools\probe\         # the fog probe (research only, never shipped)
 ```
+
+To test in-game: copy `Cairn\bin\Debug\Cairn.dll` into `<Valheim>\BepInEx\plugins\`, load a
+world, and type `cairn status`. The console is the only instrument this build has.
 
 To inspect a game member — signature, accessibility, default parameter values, or the
 actual method body — decompile it. `dotnet tool install -g ilspycmd`, then:
@@ -48,19 +54,31 @@ sits beside it. Valheim locks the DLL while running, so close the game before co
 
 ## Layout
 
+Built (task 1):
+
 ```
-Cairn/                     plugin (net472) — role-aware single DLL   [NOT YET CREATED]
-  Config/ModConfig.cs      config surface; every system has an on/off toggle
-  Core/                    LandmarkKey, LandmarkStore, Persistence, IWorldSystem, Tick
-  Net/LandmarkSync.cs      server-to-client landmark push
-  Visuals/Beacon.cs        client-side procedural column; gated on a real GPU
-  Voice/HuginVoice.cs      optional Raven static texts
-  Patches/                 Harmony patches (expected: Sign, Terminal)
-tests/CoreTests/           net10 harness; compiles the REAL source against stubs
+Cairn/                     plugin (net472) — role-aware single DLL
+  Cairn.cs                 entry point; role detection, Harmony, system registration
+  Config/ModConfig.cs      config surface; every system gets an on/off toggle
+  Core/IWorldSystem.cs     the contract every system implements
+  Core/CairnTick.cs        the ONLY Update in the mod; budgeted round-robin cursor
+  Patches/Patch_Terminal.cs  the `cairn` console
 docs/design-doc.html       source of the published design document
 tools/fetch-libs.ps1       populates libs\ from a local Valheim install
 tools/probe/               the fog probe — research, never shipped, never referenced
 libs/                      gitignored; populated by fetch-libs.ps1
+```
+
+Planned, in build order:
+
+```
+  Core/LandmarkKey.cs, LandmarkStore.cs, Persistence.cs      task 2
+  Net/LandmarkSync.cs      server-to-client landmark push    task 2/3
+  Visuals/Beacon.cs        client-drawn column; gated on a real GPU   task 3
+  Voice/HuginVoice.cs      optional Raven static texts       task 4
+  Patches/Patch_Sign.cs    a named sign becomes a landmark   task 2
+tests/CoreTests/           net10 harness, compiles the REAL source; arrives with the
+                           first thing worth testing — the task 2 store
 ```
 
 ---
@@ -194,9 +212,16 @@ ThunderStorm. **Acceptance:** a fog horizon in the CSV for each. If Clear's 10% 
 falls short of 400m, the beacon is not the primary channel and this document needs
 rewriting before task 3 exists.
 
-**1 — skeleton.** Plugin loads on client, dedicated server and listen host; `cairn` console
-registered, confirmed by reading `Terminal.commands` back rather than assuming;
-`dedicated=True` logged on the server binary.
+**1 — skeleton. BUILT 2026-09-01, NOT YET VERIFIED IN-GAME.** Plugin loads on client,
+dedicated server and listen host; `cairn` console registered, confirmed by reading
+`Terminal.commands` back rather than assuming; `dedicated=True` logged on the server binary.
+**Acceptance, still owed:** three runs. On a client — the `loaded` line, then `Cairn online
+— role=client, authority=False` once a world loads, and `cairn status` answering. On a
+dedicated server — the same with `role=dedicated server, dedicated=True, renderer=False`,
+typed at the server's own console. On a listen host — `role=listen host, authority=True`.
+A clean build proves none of this: `ZNet.IsDedicated()` is a hardcoded `false` in the
+client assembly we compile against, so the server's answer has only ever been an assumption
+here until a server prints it.
 
 **2 — the ledger.** Named signs become landmarks in a world-scoped sparse store: position,
 name, author, first seen. **Acceptance:** two worlds produce two stores in the same

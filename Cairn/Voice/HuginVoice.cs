@@ -22,15 +22,17 @@ namespace RavenIron.Cairn.Voice
     ///   • It despawns during `RandEventSystem.InEvent()` — so a Ragnarok's Wrath storm
     ///     silences it at the moment you would most want a landmark named.
     ///
-    /// A navigation channel cannot be built on that. A grace note can. So this adds a line to
-    /// the raven's own queue and lets vanilla decide whether the bird ever shows up; when it
-    /// does not, nothing is lost and nothing is logged as wrong.
+    /// A navigation channel cannot be built on that. A grace note can. So this offers a line
+    /// and lets vanilla decide whether the bird ever shows up; when it does not, nothing is
+    /// lost and nothing is logged as wrong.
     ///
-    /// ADDITIVE MEANS ADDITIVE. Our text is APPENDED to the temp queue and given priority 0,
-    /// so vanilla's own tutorials are found first and any static guide point ties against us
-    /// and wins (`GetBestText` prefers a static on `>=`). We remove our entry when we leave;
-    /// we never clear the list, never touch `m_staticTexts`, and never set a tutorial key —
-    /// writing one would mark a tutorial seen on the player's own save forever.
+    /// ADDITIVE, BUT NOT AT THE BACK OF A QUEUE. The first version appended a temp text so
+    /// vanilla came first; measured live, the queue held five entries, four of them untriggered
+    /// tutorials, and GetTempText returns the FIRST match and stops. A line at the back is a
+    /// line never read. We plant a GUIDE POINT instead — vanilla's own way of marking a place —
+    /// which competes on proximity and wins a priority tie without displacing anything. Its
+    /// OnDestroy unregisters it, so we never touch the static list ourselves, and we never set
+    /// a tutorial key: writing one marks a tutorial seen on the player's own save forever.
     ///
     /// Every member is reached by REFLECTION. `Raven.m_tempTexts` reads public in the
     /// publicized assembly and so did `Terminal.commands`, which was private at runtime and
@@ -43,7 +45,8 @@ namespace RavenIron.Cairn.Voice
         private FieldInfo _tempTextsField;
         private FieldInfo _instanceField;
 
-        private object _ourText;              // the RavenText we appended, or null
+        private GameObject _guidePost;        // the guide point we planted, or null
+        private object _ourText;              // the RavenText it carries
         private LandmarkKey _spokenFor;
         private bool _holding;
         private float _sinceCheck;
@@ -89,8 +92,9 @@ namespace RavenIron.Cairn.Voice
                 if (resolved && _tempTextsField.GetValue(null) is IList q) queued = q.Count;
             }
             catch { }
-            lines.Add($"  raven queue : {(queued < 0 ? "unreadable" : queued.ToString())} entry(s)" +
-                      (_holding ? ", including ours" : ", none of them ours"));
+            lines.Add($"  raven temp queue : {(queued < 0 ? "unreadable" : queued.ToString())} vanilla entry(s) " +
+                      "— we no longer queue there, see Offer");
+            lines.Add($"  our guide point : {(_holding ? "planted" : "none")}");
 
             Player local = Player.m_localPlayer;
             if (local == null)
@@ -209,34 +213,67 @@ namespace RavenIron.Cairn.Voice
             return _textType != null && _tempTextsField != null;
         }
 
+        /// <summary>
+        /// Offer the line as a GUIDE POINT, which is how vanilla marks a PLACE rather than a
+        /// tutorial — and the only route that can actually be chosen.
+        ///
+        /// The first version appended a temp text, deliberately last so vanilla's own entries
+        /// came first. Measured live on 2026-09-02: the queue held FIVE entries, four of them
+        /// vanilla tutorials the player had never triggered, and `GetTempText` returns the
+        /// FIRST match and stops. Untriggered tutorials never drain, so a line at the back is
+        /// a line that is never read. Being maximally deferential made the feature permanently
+        /// silent — the politeness was the bug.
+        ///
+        /// A guide point competes properly instead of queueing: `GetClosestStaticText` finds
+        /// the nearest one within 15m, and `GetBestText` prefers a static over a temp text on
+        /// `>=` priority, so at priority 0 we win a tie against a tutorial without displacing
+        /// it. Vanilla's queue is left completely untouched.
+        ///
+        /// Guarded on a raven existing, because `GuidePoint.Start` instantiates the raven
+        /// prefab when none does — and that field is null on a component we created.
+        /// </summary>
         private void Offer(LandmarkKey key, string storedName)
         {
-            if (!(_tempTextsField.GetValue(null) is IList queue)) return;
+            if (!RavenExists()) return;
+
+            Type guideType = AccessTools.TypeByName("GuidePoint");
+            if (guideType == null) return;
 
             string spoken = DisplayText.ForSpeech(storedName, ModConfig.RavenNameMaxLength.Value);
             if (spoken.Length == 0) return;
 
+            // Created INACTIVE so Start cannot run before the text is in place; a guide point
+            // that registers an empty RavenText would put a blank line in the raven's mouth.
+            var post = new GameObject("cairn_guidepoint");
+            post.SetActive(false);
+            post.transform.position = new Vector3(key.X, key.Y, key.Z);
+
+            Component guide = post.AddComponent(guideType);
+
             object text = Activator.CreateInstance(_textType);
             SetField(text, "m_text", spoken);
-            SetField(text, "m_topic", "");        // no topic line: the name is the whole message
+            SetField(text, "m_topic", "");        // the name is the whole message
             SetField(text, "m_key", "");          // NEVER a tutorial key — that persists on the save
             SetField(text, "m_munin", false);     // Hugin, not Munin
-            SetField(text, "m_priority", 0);      // vanilla wins every tie
+            SetField(text, "m_priority", 0);      // ties, and a tie is enough for a static
             SetField(text, "m_alwaysSpawn", true);
+            SetField(guide, "m_text", text);
 
-            queue.Add(text);                      // APPENDED: vanilla's entries are found first
+            post.SetActive(true);                 // Start registers it with the raven
 
+            _guidePost = post;
             _ourText = text;
             _spokenFor = key;
             _holding = true;
 
             if (ModConfig.VerboseLogging.Value)
-                Cairn.Log.LogInfo($"HuginVoice: offered \"{spoken}\" for {key}.");
+                Cairn.Log.LogInfo($"HuginVoice: guide point for \"{spoken}\" at {key}.");
         }
 
         /// <summary>
-        /// Take our line back out. Removal is by REFERENCE, so a vanilla entry can never be
-        /// removed by accident even if its text happened to match ours.
+        /// Take the guide point away again. Destroying it runs `GuidePoint.OnDestroy`, which
+        /// calls `Raven.UnregisterStaticText` — vanilla removes its own registration, so we
+        /// never touch the static list ourselves and cannot drop somebody else's entry.
         /// </summary>
         private void Release()
         {
@@ -245,18 +282,14 @@ namespace RavenIron.Cairn.Voice
 
             try
             {
-                if (_ourText != null && _tempTextsField != null &&
-                    _tempTextsField.GetValue(null) is IList queue)
-                {
-                    for (int i = queue.Count - 1; i >= 0; i--)
-                        if (ReferenceEquals(queue[i], _ourText)) queue.RemoveAt(i);
-                }
+                if (_guidePost != null) Destroy(_guidePost);
             }
             catch
             {
-                // Leaving a stale line in the queue is untidy; throwing here would be worse.
+                // A stale guide point is untidy; throwing here would be worse.
             }
 
+            _guidePost = null;
             _ourText = null;
         }
 

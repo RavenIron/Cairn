@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Globalization;
+using System.Reflection;
 using HarmonyLib;
 using RavenIron.Cairn.Config;
 using RavenIron.Cairn.Core;
@@ -8,9 +10,9 @@ namespace RavenIron.Cairn.Patches
 {
     /// <summary>
     /// The `cairn` console — the locked-decision prefix. Registered from an InitTerminal
-    /// postfix; the ConsoleCommand constructor assigns into `Terminal.commands` by lowered
-    /// name (decompile-verified 2026-09-01), so it overwrites its own entry and the repeat
-    /// call per terminal is harmless.
+    /// postfix; the ConsoleCommand constructor assigns into Terminal's command map by
+    /// lowered name (decompile-verified 2026-09-01), so it overwrites its own entry and the
+    /// repeat call per terminal is harmless.
     ///
     /// Reads answer everywhere. There is nothing to mutate yet; when there is, it follows
     /// Ragnarok's Wrath's self-gating rule — mutations run only where the store lives, and
@@ -21,30 +23,88 @@ namespace RavenIron.Cairn.Patches
     {
         private static bool _confirmed;
 
+        /// <summary>
+        /// Resolved lazily and never latched on failure, per house style rule 5.
+        /// </summary>
+        private static FieldInfo _commandsField;
+
         private static void Postfix()
         {
             try
             {
                 new Terminal.ConsoleCommand("cairn", "Cairn: cairn status", Run);
 
+                if (_confirmed) return;
+                _confirmed = true;
+
                 // Read it back rather than assuming. "Registered a command" and "the command
-                // exists" are different claims, and only one of them can be checked — this is
-                // the cheapest place to turn the first into the second.
-                if (!_confirmed)
+                // exists" are different claims, and only one of them can be checked.
+                IDictionary map = ReadCommandMap();
+                if (map == null)
                 {
-                    _confirmed = true;
-                    bool present = Terminal.commands != null && Terminal.commands.ContainsKey("cairn");
-                    if (present)
-                        Cairn.Log.LogInfo("cairn console registered — confirmed present in Terminal.commands.");
-                    else
-                        Cairn.Log.LogError(
-                            "cairn console did NOT appear in Terminal.commands after registration. " +
-                            "The console is the only instrument this build has; treat this as fatal.");
+                    Cairn.Log.LogWarning(
+                        "cairn console: registered, but Terminal's command map could not be read " +
+                        "back, so registration is UNCONFIRMED. The command may still work. If " +
+                        "Valheim renamed the field, this instrument needs updating.");
+                }
+                else if (map.Contains("cairn"))
+                {
+                    Cairn.Log.LogInfo(
+                        $"cairn console registered — confirmed present in Terminal's command map " +
+                        $"({map.Count} command(s) total).");
+                }
+                else
+                {
+                    Cairn.Log.LogError(
+                        "cairn console did NOT appear in Terminal's command map after registration. " +
+                        "The console is the only instrument this build has; treat this as fatal.");
                 }
             }
             catch (Exception ex)
             {
                 Cairn.Log.LogWarning($"cairn console: register failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Terminal's command dictionary, by reflection. Returns null when it cannot be read.
+        ///
+        /// HOUSE STYLE RULE 5, and the most expensive way to learn it: `Terminal.commands` is
+        /// `public static` in the PUBLICIZED reference assembly and private at runtime. Naming
+        /// it directly in source produced
+        ///
+        ///     FieldAccessException: Field `Terminal:commands' is inaccessible
+        ///
+        /// on a dedicated server on 2026-09-02 — and the try/catch wrapped around it did not
+        /// help, because Mono raises that when the METHOD IS COMPILED, not when the line runs.
+        /// The whole Postfix aborted, taking Terminal.Awake and Chat.Awake with it, and the
+        /// server shut down before it finished booting. A clean build had reported 0 warnings.
+        ///
+        /// Two lessons, both load-bearing: reach private members only through reflection, and
+        /// never treat try/catch as protection against an inaccessible member — the exception
+        /// arrives too early for it. Returned as a non-generic IDictionary on purpose: that
+        /// names neither the field's type nor its generic arguments anywhere in our IL.
+        /// </summary>
+        private static IDictionary ReadCommandMap()
+        {
+            try
+            {
+                if (_commandsField == null)
+                    _commandsField = AccessTools.Field(typeof(Terminal), "commands");
+
+                if (_commandsField == null)
+                {
+                    Cairn.Log.LogWarning(
+                        "cairn console: Terminal has no field named 'commands' — Valheim's API moved.");
+                    return null;
+                }
+
+                return _commandsField.GetValue(null) as IDictionary;
+            }
+            catch (Exception ex)
+            {
+                Cairn.Log.LogWarning($"cairn console: reading Terminal's command map threw: {ex.Message}");
+                return null;
             }
         }
 

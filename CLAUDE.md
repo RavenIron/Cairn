@@ -196,6 +196,17 @@ inferred from the shape of an API.
   choose.
 - **`Utils.GetMainCamera()` is a frame-cached `Camera.main`** — the main camera is tagged,
   so client-side code needs no game reference to reach it.
+- **`Terminal.commands` is `public static` in the publicized assembly and PRIVATE at
+  runtime — and try/catch does not save you.** Naming it directly in a Harmony postfix
+  produced `FieldAccessException: Field 'Terminal:commands' is inaccessible` on the first
+  dedicated-server run (2026-09-02), and the `try/catch` wrapped around that very line did
+  nothing, because **Mono raises it when the METHOD IS COMPILED, not when the line runs**.
+  The whole postfix aborted, taking `Terminal.Awake` and `Chat.Awake` with it, and the
+  server shut down mid-boot. The build had reported 0 warnings. Two lessons, both
+  load-bearing: reach private members only through reflection resolved at runtime, and
+  never treat a try/catch as protection against an inaccessible member — the exception
+  arrives too early to catch. `Patch_Terminal` now reads the map as a non-generic
+  `IDictionary`, which names neither the field's type nor its generic arguments in our IL.
 - Inherited from RW and still true here: a publicized member listed as `public` may be
   inaccessible at runtime; `InvariantCulture` on everything that touches disk; a cloud
   world has no filesystem path; setting a ZDO's position does not move an object;
@@ -212,16 +223,28 @@ ThunderStorm. **Acceptance:** a fog horizon in the CSV for each. If Clear's 10% 
 falls short of 400m, the beacon is not the primary channel and this document needs
 rewriting before task 3 exists.
 
-**1 — skeleton. BUILT 2026-09-01, NOT YET VERIFIED IN-GAME.** Plugin loads on client,
-dedicated server and listen host; `cairn` console registered, confirmed by reading
-`Terminal.commands` back rather than assuming; `dedicated=True` logged on the server binary.
-**Acceptance, still owed:** three runs. On a client — the `loaded` line, then `Cairn online
-— role=client, authority=False` once a world loads, and `cairn status` answering. On a
-dedicated server — the same with `role=dedicated server, dedicated=True, renderer=False`,
-typed at the server's own console. On a listen host — `role=listen host, authority=True`.
-A clean build proves none of this: `ZNet.IsDedicated()` is a hardcoded `false` in the
-client assembly we compile against, so the server's answer has only ever been an assumption
-here until a server prints it.
+**1 — skeleton. DEDICATED-SERVER LEG VERIFIED 2026-09-02; client and listen host still
+owed.** Plugin loads, `cairn` console registers and confirms itself by reading Terminal's
+command map back, and the role line prints.
+
+Verified on a minimal dedicated server (`C:\Users\donfr\ValheimServers\CairnTest`, port
+2466, world `CairnTest`, Cairn.dll and nothing else), `isModded: True`, world created from
+nothing:
+
+```
+Cairn v0.1.0 loaded — renderer=False, systems=0. Nothing is simulated yet: this is the skeleton.
+cairn console registered — confirmed present in Terminal's command map (141 command(s) total).
+Cairn online — role=dedicated server, authority=True, dedicated=True, renderer=False, systems=0, budget=2ms/frame
+```
+
+`dedicated=True` is the line that could only ever be settled by a server: `ZNet.IsDedicated()`
+is a hardcoded `false` in the client assembly we compile against.
+
+**The first attempt at this run killed the server outright** — see the `Terminal.commands`
+entry in Known traps. It is the reason this task's acceptance is a run and not a build.
+
+**Still owed:** a client run (`role=client, authority=False`, `cairn status` answering at
+F5) and a listen host (`role=listen host, authority=True`).
 
 **2 — the ledger.** Named signs become landmarks in a world-scoped sparse store: position,
 name, author, first seen. **Acceptance:** two worlds produce two stores in the same

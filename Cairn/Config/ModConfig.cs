@@ -87,12 +87,13 @@ namespace RavenIron.Cairn.Config
                 "two of 3458 prefabs contain \"sign\", and these are they.");
 
             StonePrefabs = config.Bind(
-                "3 - Cairn piles", "StonePrefabs", "stone_pile",
-                "Comma-separated stone pieces a cairn can be built from. Names confirmed in-game; " +
-                "which of them a player can actually BUILD is a separate question, and the " +
-                "per-prefab found= counts in the sweep log answer it empirically. Deliberately " +
-                "the SMALL pieces: a cairn is stacked, and floors and stairs would mostly feed " +
-                "the footprint rule things it is going to reject anyway.");
+                "3 - Cairn piles", "StonePrefabs", "Placeable_Stone,stone_pile",
+                "Comma-separated stone pieces a cairn can be built from. Both confirmed BUILDABLE " +
+                "in-game 2026-09-02 by `cairn pieces stone`: Placeable_Stone is [Hoe] Stone x1 — " +
+                "a single stone you stack, which is what a cairn actually is — and stone_pile is " +
+                "[Hammer] Stone x50, one pre-made heap. Architecture is deliberately absent: " +
+                "walls and floors would only feed the footprint rule things it is going to " +
+                "reject, and leaving them out means a stone HOUSE can never become a landmark.");
 
             PileLinkMeters = config.Bind(
                 "3 - Cairn piles", "PileLinkMeters", 2.5f,
@@ -103,9 +104,12 @@ namespace RavenIron.Cairn.Config
                     new AcceptableValueRange<float>(0.5f, 10f)));
 
             PileMinPieces = config.Bind(
-                "3 - Cairn piles", "PileMinPieces", 2,
+                "3 - Cairn piles", "PileMinPieces", 4,
                 new ConfigDescription(
-                    "Fewer stones than this is a dropped rock, not a cairn.",
+                    "Fewer stones than this is a dropped rock, not a cairn. At 1 stone per " +
+                    "Placeable_Stone the price signals nothing, so DELIBERATENESS is carried by " +
+                    "this count and the footprint rule instead — which is the job they were " +
+                    "written for. Raise it if scattered decorative stones start lighting up.",
                     new AcceptableValueRange<int>(2, 20)));
 
             PileMaxPieces = config.Bind(
@@ -131,16 +135,18 @@ namespace RavenIron.Cairn.Config
                     new AcceptableValueRange<float>(1f, 30f)));
 
             StonePileStoneCost = config.Bind(
-                "3 - Cairn piles", "StonePileStoneCost", 10,
+                "3 - Cairn piles", "StonePileStoneCost", 0,
                 new ConfigDescription(
-                    "Stone required to build one vanilla 'stone_pile'. THIS EDITS A VANILLA " +
-                    "RECIPE — the one thing in this mod that reaches outside its own scope. At " +
-                    "vanilla's 50 a two-pile cairn costs 100 stone, which is enough that nobody " +
-                    "builds waymarks casually, and a navigation mod whose waymarks are too dear " +
-                    "to litter has failed at the only thing it does. SET TO 0 to leave the game " +
-                    "entirely alone. The change announces itself in the log with the before and " +
-                    "after, because a mod that silently halves a recipe is exactly the surprise " +
-                    "this studio dislikes in others.",
+                    "Stone required to build one vanilla 'stone_pile'. 0 means DO NOT TOUCH THE " +
+                    "GAME, and that is now the default. Any other value edits a vanilla recipe — " +
+                    "the only thing in this mod that reaches outside its own scope — and " +
+                    "announces itself in the log with the before and the after, because a mod " +
+                    "that silently rewrites a recipe is exactly the surprise this studio " +
+                    "dislikes in others. It briefly shipped at 10, when stone_pile at 50 stone " +
+                    "looked like the only way to make cairns affordable. Then `cairn pieces " +
+                    "stone` turned up Placeable_Stone at ONE stone, the problem the override " +
+                    "existed to solve stopped existing, and the right move was to hand vanilla " +
+                    "back. Kept as a switch for anyone who prefers heaps to stacks.",
                     new AcceptableValueRange<int>(0, 100)));
         }
     }

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>CairnProbe</AssemblyName>
+    <RootNamespace>RavenIron.CairnProbe</RootNamespace>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Company>Raven Iron</Company>
+    <Product>Cairn Probe</Product>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!--
+    Research instrument, NOT the mod. It is never referenced by the plugin and is
+    built by hand when a measurement is needed. Shares the repo's libs\, populated
+    by tools\fetch-libs.ps1; override if it ever moves:
+        dotnet build -p:LibsDir=D:\somewhere\libs
+
+    Deliberately references ONLY BepInEx and Unity. No assembly_valheim: every game
+    member here is reached by reflection, so the probe cannot hit the rule-5 trap it
+    was written to measure around, and it keeps working if Valheim moves a member.
+  -->
+  <PropertyGroup>
+    <LibsDir Condition="'$(LibsDir)' == ''">$(MSBuildThisFileDirectory)..\..\libs</LibsDir>
+  </PropertyGroup>
+
+  <Target Name="CheckLibs" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(LibsDir)\BepInEx.dll')"
+           Text="LibsDir '$(LibsDir)' has no BepInEx.dll. Run tools\fetch-libs.ps1, or pass -p:LibsDir=..." />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>$(LibsDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(LibsDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(LibsDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

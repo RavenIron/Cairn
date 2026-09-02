@@ -1,0 +1,889 @@
+<title>Cairn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,500;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* ---- Light palette: cool stone ground, lichen for what is measured,
+         ember reserved for the beacon and for what is still open. ---- */
+  :root {
+    --ground:       #EEF0EC;
+    --surface:      #F8F9F6;
+    --sunk:         #E3E7E1;
+    --ink:          #191F1C;
+    --ink-2:        #4C5651;
+    --ink-3:        #6E7873;
+    --rule:         #C9CFC9;
+    --rule-soft:    #DCE1DB;
+
+    --ember:        #A8471A;
+    --ember-ink:    #8E3D16;
+    --ember-tint:   rgba(168, 71, 26, 0.09);
+    --lichen:       #3B6553;
+    --lichen-tint:  rgba(59, 101, 83, 0.10);
+
+    /* Sequential ramp, one hue: fog density, light (thin) to dark (thick). */
+    --fog-1:        #6E93AB;
+    --fog-2:        #3D6A86;
+    --fog-3:        #1B3D52;
+    --grid:         #D3D9D3;
+
+    --shadow:       0 1px 2px rgba(25, 31, 28, 0.05);
+
+    --measure:      60ch;
+    --rail:         13rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #121614;
+      --surface:     #191E1B;
+      --sunk:        #0D110F;
+      --ink:         #E4E8E3;
+      --ink-2:       #A5AFA8;
+      --ink-3:       #79837D;
+      --rule:        #2C332E;
+      --rule-soft:   #232823;
+
+      --ember:       #E08A4A;
+      --ember-ink:   #EDA36B;
+      --ember-tint:  rgba(224, 138, 74, 0.12);
+      --lichen:      #7FB49A;
+      --lichen-tint: rgba(127, 180, 154, 0.13);
+
+      --fog-1:       #CBDDE8;
+      --fog-2:       #8CB2C9;
+      --fog-3:       #4E7F9E;
+      --grid:        #262D28;
+
+      --shadow:      0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #121614;
+    --surface:     #191E1B;
+    --sunk:        #0D110F;
+    --ink:         #E4E8E3;
+    --ink-2:       #A5AFA8;
+    --ink-3:       #79837D;
+    --rule:        #2C332E;
+    --rule-soft:   #232823;
+
+    --ember:       #E08A4A;
+    --ember-ink:   #EDA36B;
+    --ember-tint:  rgba(224, 138, 74, 0.12);
+    --lichen:      #7FB49A;
+    --lichen-tint: rgba(127, 180, 154, 0.13);
+
+    --fog-1:       #CBDDE8;
+    --fog-2:       #8CB2C9;
+    --fog-3:       #4E7F9E;
+    --grid:        #262D28;
+
+    --shadow:      0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 82rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 4.5rem 0 2.5rem;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  h1 {
+    font-family: Alegreya, ui-serif, Georgia, "Times New Roman", serif;
+    font-weight: 800;
+    font-size: clamp(3.6rem, 12vw, 6.5rem);
+    line-height: 0.92;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .deck {
+    font-family: Alegreya, ui-serif, Georgia, serif;
+    font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+    line-height: 1.42;
+    color: var(--ink-2);
+    max-width: 46ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  /* ---------- the four readings ---------- */
+
+  .readings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin-top: 1rem;
+  }
+
+  .reading {
+    background: var(--surface);
+    padding: 1.1rem 1.15rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .reading b {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 1.9rem;
+    font-weight: 500;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .reading span {
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: var(--ink-2);
+  }
+
+  .reading em { color: var(--ink-3); font-style: normal; }
+
+  /* ---------- status marks ---------- */
+
+  .mark {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    display: inline-block;
+    padding: 0.16rem 0.45rem;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+
+  .mark-measured { color: var(--lichen); background: var(--lichen-tint); }
+  .mark-open     { color: var(--ember-ink); background: var(--ember-tint); }
+  .mark-closed   { color: var(--ink-3); background: transparent; }
+
+  /* ---------- body layout: a reading column with a labelled rail ---------- */
+
+  section {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, var(--measure));
+    gap: 0 2.5rem;
+    padding: 3.25rem 0 0;
+  }
+
+  .rail {
+    grid-column: 1;
+    padding-top: 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: flex-start;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1.25rem;
+    min-height: 4rem;
+  }
+
+  .rail-note {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.7rem;
+    line-height: 1.45;
+    color: var(--ink-3);
+  }
+
+  .col { grid-column: 2; min-width: 0; }
+
+  h2 {
+    font-family: Alegreya, ui-serif, Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(1.75rem, 3vw, 2.15rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: Alegreya, ui-serif, Georgia, serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    line-height: 1.25;
+    margin: 2rem 0 0.6rem;
+  }
+
+  p { margin: 0 0 1.05rem; text-wrap: pretty; }
+  .col > p:last-child { margin-bottom: 0; }
+
+  a {
+    color: var(--ember-ink);
+    text-underline-offset: 0.15em;
+    text-decoration-thickness: 1px;
+  }
+
+  strong { font-weight: 600; color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.86em;
+    background: var(--sunk);
+    padding: 0.1em 0.3em;
+    border-radius: 2px;
+  }
+
+  /* ---------- the evidence block: a decompiled fact, quoted ---------- */
+
+  .evidence {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--lichen);
+    padding: 1rem 1.15rem;
+    margin: 0 0 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .evidence pre {
+    margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--ink);
+    overflow-x: auto;
+  }
+
+  .evidence figcaption {
+    font-size: 0.8rem;
+    color: var(--ink-3);
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- pull quote: the rule the whole mod hangs on ---------- */
+
+  .rule-quote {
+    margin: 2rem 0;
+    padding: 1.5rem 0 1.5rem 1.5rem;
+    border-left: 3px solid var(--ember);
+    font-family: Alegreya, ui-serif, Georgia, serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(1.35rem, 2.6vw, 1.7rem);
+    line-height: 1.35;
+    color: var(--ink);
+    text-wrap: pretty;
+  }
+
+  /* ---------- tables ---------- */
+
+  .table-wrap { overflow-x: auto; margin: 0 0 1.15rem; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.88rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.9rem 0.6rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td.num {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ---------- figure: fog falloff ---------- */
+
+  .figure {
+    grid-column: 1 / -1;
+    margin: 1.5rem 0 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.25rem 1.25rem 1rem;
+  }
+
+  .figure-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .figure-title {
+    font-family: Alegreya, ui-serif, Georgia, serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    margin: 0;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.74rem;
+    color: var(--ink-2);
+  }
+
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .legend i { width: 14px; height: 2px; display: inline-block; }
+
+  .chart-shell { position: relative; overflow-x: auto; }
+  svg.chart { display: block; width: 100%; min-width: 34rem; height: auto; }
+
+  .tip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--ground);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+    padding: 0.5rem 0.6rem;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -110%);
+  }
+
+  .tip[data-on="1"] { opacity: 1; }
+  .tip[data-below="1"] { transform: translate(-50%, 14px); }
+  .tip u { text-decoration: none; color: var(--ink-3); }
+
+  details {
+    margin-top: 1rem;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 0.75rem;
+  }
+
+  summary {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    cursor: pointer;
+  }
+
+  summary:focus-visible, a:focus-visible {
+    outline: 2px solid var(--ember);
+    outline-offset: 3px;
+  }
+
+  .figure-note {
+    font-size: 0.82rem;
+    color: var(--ink-3);
+    margin: 0.85rem 0 0;
+    max-width: 72ch;
+  }
+
+  /* ---------- closing ---------- */
+
+  .closing {
+    margin-top: 4rem;
+    border-top: 1px solid var(--rule);
+    padding-top: 2rem;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2.5rem;
+  }
+
+  @media (max-width: 62rem) {
+    section { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .rail {
+      grid-column: 1;
+      flex-direction: row;
+      align-items: center;
+      flex-wrap: wrap;
+      border-right: 0;
+      border-left: 3px solid var(--rule-soft);
+      padding: 0 0 0 0.9rem;
+      margin-bottom: 1rem;
+      min-height: 0;
+    }
+    .col { grid-column: 1; }
+    .figure { grid-column: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">Raven Iron &middot; design document &middot; 2026-09-01</div>
+    <h1>Cairn</h1>
+    <p class="deck">On a world with no map and no portals, knowing where you are is knowledge. Cairn makes that knowledge something you can build, light, and lose &mdash; without ever drawing it on the screen.</p>
+
+    <div class="readings">
+      <div class="reading">
+        <b>64 m</b>
+        <span>Where vanilla smoke stops existing. <em>Not culled &mdash; never emitted.</em></span>
+      </div>
+      <div class="reading">
+        <b>30 m</b>
+        <span>The raven's altitude floor. <em>Absent on every coastline.</em></span>
+      </div>
+      <div class="reading">
+        <b>95 px</b>
+        <span>A 40&nbsp;m column at 400&nbsp;m, at 65&deg; FOV. <em>Geometry is not the problem.</em></span>
+      </div>
+      <div class="reading">
+        <b>&mdash;</b>
+        <span>The fog horizon. <em>Unmeasured. This is the gate.</em></span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-closed">the problem</span>
+    </div>
+    <div class="col">
+      <h2>Knowledge that lives in screenshots</h2>
+      <p>Ravenrest runs with no map and no portals. That is the whole appeal: the world is large, and getting anywhere is a thing you did rather than a thing you clicked. But the knowledge that makes it navigable already exists &mdash; it just lives in players' heads, and in screenshots pasted into Discord with a caption like <em>the copper is north of the two rocks</em>.</p>
+      <p>Every instinct says: draw it on the screen. Put a marker there. Share a pin. That instinct is the one thing this mod may never act on, and the reason is not taste. A HUD was cut from Ragnarok's Wrath deliberately, and a navigation mod is exactly the shape of thing that would quietly reintroduce it under a different name.</p>
+      <p>So the design constraint came first, and everything else is downstream of it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-closed">house rule</span>
+      <span class="rail-note">Inherited from RW; the escape hatch is welded shut on purpose.</span>
+    </div>
+    <div class="col">
+      <h2>Every answer is an object in the world</h2>
+      <blockquote class="rule-quote">If a player learns where they are, they learn it by looking at terrain, a stone, a fire, a bird, or the sky. The moment the mod renders a bearing, it has become the companion app that was deliberately cut.</blockquote>
+      <p>This is a harder rule than it sounds, because the game gives you four candidate channels and three of them turn out to be structurally unfit. Finding that out cost one afternoon with a decompiler and saved a month of building the wrong mod.</p>
+      <p>What follows is each channel, and what the shipping assembly actually said about it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-measured">measured</span>
+      <span class="mark mark-closed">rejected</span>
+      <span class="rail-note">Channel 1 of 4 &mdash; smoke.</span>
+    </div>
+    <div class="col">
+      <h2>Smoke is capped at 64 metres, by construction</h2>
+      <p>The obvious beacon is a big fire throwing a column of smoke. It is also the first idea the engine kills, and it kills it three separate ways.</p>
+
+      <figure class="evidence">
+        <pre>// SmokeSpawner.Spawn
+if (localPlayer == null ||
+    Vector3.Distance(localPlayer.transform.position, transform.position) &gt; 64f)
+{
+    m_lastSpawnTime = time;      // no puff is created at all
+}</pre>
+        <figcaption>SmokeSpawner &mdash; assembly_valheim, read 2026-09-01</figcaption>
+      </figure>
+
+      <p>Past 64&nbsp;m the smoke is not faded, not culled, not simplified. It is <strong>never emitted</strong>. No render setting, no hardware, and no config value reaches behind that gate.</p>
+      <p>Two more facts finish the argument. <code>Smoke</code> is globally capped &mdash; over 100 live puffs and <code>FadeOldest()</code> starts eating them &mdash; so a bigger column steals from every other fire the player can see. And each puff is a <code>Rigidbody</code> with a ten-second life, so scaling one up is a physics bill, not a rendering one. The engine even has <code>FadeMostDistant()</code>, which culls the furthest smoke first: vanilla's own policy is the precise opposite of what a beacon needs.</p>
+      <p><strong>Decision: Cairn never uses vanilla smoke.</strong> Locked, with the evidence attached, so it does not get relitigated in six months by someone who reasonably assumes a fire makes smoke.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-measured">measured</span>
+      <span class="mark mark-closed">demoted</span>
+      <span class="rail-note">Channel 2 of 4 &mdash; Hugin.</span>
+    </div>
+    <div class="col">
+      <h2>The raven cannot point</h2>
+      <p>Hugin is almost too good to be true: a bird, already in the game, already themed to the studio's own name, that speaks to you in a rendered chat bubble rather than a UI panel. The first design had it circling toward the nearest landmark you had stood at.</p>
+      <p>The game will not do that, and the reasons are structural rather than incidental.</p>
+
+      <figure class="evidence">
+        <pre>// Raven.FindSpawnPoint - 20 attempts, +/-30 deg from camera forward
+if (ZoneSystem.instance.GetSolidHeight(candidate, out height, out normal, out go)
+    &amp;&amp; height &gt; 30f                              // altitude floor
+    &amp;&amp; normal.y &gt; 0.5f                            // flat enough
+    &amp;&amp; Mathf.Abs(height - position.y) &lt; 2f)       // level with the player</pre>
+        <figcaption>Raven &mdash; assembly_valheim, read 2026-09-01</figcaption>
+      </figure>
+
+      <p><strong>Below 30 metres of altitude the raven has no legal ground to land on.</strong> It is therefore absent on exactly the coastlines, river mouths and beaches where a navigator most needs help. Selection is a 15&nbsp;m proximity search, not a distant beacon. And it despawns when a hostile is within 10&nbsp;m or when <code>RandEventSystem.InEvent()</code> is true &mdash; meaning Ragnarok's Wrath's own Devastating Storms silence the bird at the exact moment you would most want it.</p>
+      <p><strong>Decision: the raven is flavour, never load-bearing.</strong> It becomes the <em>voice of a landmark once you have reached it</em> &mdash; registering static texts, never overwriting vanilla tutorial text, degrading to silence. A good mod is allowed a grace note. It is not allowed to route its core function through one.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-measured">measured</span>
+      <span class="mark mark-open">the design</span>
+      <span class="rail-note">Channel 3 of 4 &mdash; the beacon.</span>
+    </div>
+    <div class="col">
+      <h2>The beacon must not be an object</h2>
+      <p>What survives is a lit column at a named place, visible across a valley or from the water. The trap here is subtler than the smoke gate, because the naive implementation looks right and fails silently at range.</p>
+      <p>Valheim streams objects by zone. Whether a client instantiates a thing at all depends on a flag baked into its prefab:</p>
+
+      <figure class="evidence">
+        <pre>// ZNetView - the distant flag is prefab data, not a runtime choice
+m_zdo.Distant = m_distant;
+
+// ZDOMan.CreateSyncList - distant objects go last, and only if there is room
+if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
+        <figcaption>ZNetView, ZDOMan &mdash; assembly_valheim, read 2026-09-01</figcaption>
+      </figure>
+
+      <p>Vanilla fireplaces are near-only, so at beacon range <strong>the fire object is not instantiated on the client at all</strong>. And even a distant-flagged object is sent last and starves on a busy server. Any design that says "make the fire visible from further away" is fighting the object streamer, and loses.</p>
+      <p><strong>Decision: the beacon is drawn client-side from synced state, never from a networked object.</strong> The server holds the truth &mdash; there is a lit beacon at these coordinates &mdash; and pushes it; the client draws a column there whether or not a single ZDO from that zone is loaded. This is not a new pattern: it is the path Ragnarok's Wrath already runs and verified in-game for plague fog. Existence is server truth, rendering is local, and the two never depend on each other.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-open">unmeasured</span>
+      <span class="rail-note">The one question that can still invalidate the design.</span>
+    </div>
+    <div class="col">
+      <h2>Fog is the only thing left that can kill it</h2>
+      <p>Streaming is solved and geometry is generous. What remains is atmospheric: Valheim blends <code>RenderSettings.fogDensity</code> every frame from the current environment's four day-phase values, all of them serialized in prefabs rather than written in code. There is no number to look up. It has to be measured.</p>
+      <p>Under exponential-squared fog, transmittance falls as <code>exp(-(density &times; distance)&sup2;)</code> &mdash; and squaring makes density brutally decisive. One order of magnitude separates a beacon that reads at 400&nbsp;m from one that does not exist.</p>
+    </div>
+
+    <figure class="figure">
+      <div class="figure-head">
+        <p class="figure-title">Contrast surviving at distance, by fog density</p>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="chart-shell">
+        <svg class="chart" id="chart" viewBox="0 0 760 320" role="img"
+             aria-label="Transmittance falls with distance under exponential-squared fog. At 400 metres, density 0.001 retains 85 percent of contrast, 0.004 retains 8 percent, and 0.010 retains none."></svg>
+        <div class="tip" id="tip" aria-hidden="true"></div>
+      </div>
+      <p class="figure-note">Each curve is Unity's exponential-squared fog at one density. The ember line marks 400&nbsp;m &mdash; the range at which a beacon has to read for the design to hold. Hover for values.</p>
+      <details>
+        <summary>Table view</summary>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Density</th><th scope="col">100 m</th><th scope="col">200 m</th><th scope="col">400 m</th><th scope="col">800 m</th><th scope="col">10% horizon</th></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </details>
+    </figure>
+
+    <div class="col">
+      <p style="margin-top:1.5rem">The probe in <code>tools\probe\</code> logs the live values across Clear, Misty, Rain and ThunderStorm for one in-game day. <strong>If Clear's 10% horizon falls short of 400&nbsp;m, the beacon is not the primary channel and this document needs rewriting before the code exists.</strong> That is why the measurement is task 0 and not a detail to be checked later.</p>
+      <p>If it falls short only in fog and rain, that is almost certainly the right behaviour rather than a defect &mdash; a beacon lost in weather is honest &mdash; but it has to be a decision, not a surprise.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-measured">measured</span>
+      <span class="rail-note">Why the column should be tall and thin, not wide.</span>
+    </div>
+    <div class="col">
+      <h2>The geometry is on our side</h2>
+      <p><code>GameCamera.m_fov</code> is 65, and Unity's <code>fieldOfView</code> is <em>vertical</em>. That single fact converts the whole legibility question into arithmetic:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">A 40&nbsp;m column at</th><th scope="col">Angular height</th><th scope="col">On a 1080p screen</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">100 m</td><td class="num">21.8&deg;</td><td class="num">362 px</td></tr>
+            <tr><td class="num">200 m</td><td class="num">11.3&deg;</td><td class="num">188 px</td></tr>
+            <tr><td class="num">400 m</td><td class="num">5.7&deg;</td><td class="num">95 px</td></tr>
+            <tr><td class="num">800 m</td><td class="num">2.9&deg;</td><td class="num">48 px</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A 95&nbsp;px vertical line at 400&nbsp;m is unmistakably a landmark. Width earns far less: three metres of thickness is about seven pixels at that range, eight metres about nineteen. <strong>Height buys legibility linearly; width past roughly eight metres is wasted.</strong> Build it tall and thin, like a real signal fire, and spend the particle budget on reach rather than bulk.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-closed">decided</span>
+      <span class="rail-note">No new prefabs, ever &mdash; the CreateObjectsSorted landmine.</span>
+    </div>
+    <div class="col">
+      <h2>A landmark is a sign somebody wrote</h2>
+      <p>Cairn adds no prefabs. A mod that adds one must ship server-side or <code>ZNetScene.CreateObjectsSorted</code> calls <code>DestroyZDO</code> on every hash it cannot resolve &mdash; silent data loss, in someone else's world. That is a line this studio does not cross for a cosmetic.</p>
+      <p>Which turns out to be a gift, because vanilla already ships the perfect anchor. <code>Sign</code> is a <code>TextReceiver</code>: text persisted in the ZDO with a revision counter, the author captured as a platform id, a 50-character limit, and the game's own text-entry flow. A named sign <em>is</em> a landmark.</p>
+      <p>Better still, players build the cairn themselves out of ordinary stone. Everyone's looks different, none of them are ours, and with the mod uninstalled the whole thing degrades into exactly what it appears to be: a pile of rocks with a sign on it. <strong>Cairn notices what players build. It never seeds the world with points of interest.</strong></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-closed">boundaries</span>
+    </div>
+    <div class="col">
+      <h2>Where Cairn stops</h2>
+      <p>Every Raven Iron mod owns one thing and reads the others by reflection. The boundaries here matter more than usual, because "navigation" is a word that expands if you let it.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Neighbour</th><th scope="col">Owns</th><th scope="col">The line</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Undertow</td><td>Water motion, and nothing else</td><td>Cairn owns signals. Coastal beacons are the seamark half Undertow deliberately refuses.</td></tr>
+            <tr><td>Ragnarok's Wrath</td><td>Zone drift &mdash; what happened to land</td><td>Separate store. A landmark is what people named, and must never become a zone statistic.</td></tr>
+            <tr><td>FireFront</td><td>Fire, and every consequence of it</td><td>Cairn decides only that a beacon is lit.</td></tr>
+            <tr><td>The Raven's Call</td><td>Player data</td><td>No connection. Cairn records places, never people's numbers.</td></tr>
+            <tr><td>Seasonality / Seasons</td><td>Environment selection</td><td>Untouched by construction. Cairn drives no visuals from season.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-open">unresolved</span>
+      <span class="rail-note">Decide before any name leaves the sign it was written on.</span>
+    </div>
+    <div class="col">
+      <h2>The one thing left deliberately open</h2>
+      <p>A named sign is player-authored text, and Cairn gives it reach it did not have before. A name that previously only a visitor read could be spoken aloud by the raven, or hung on a beacon visible from across a valley.</p>
+      <p>Vanilla already has a viewability flag and a mute path on <code>Sign</code>. Cairn has to decide what it honours, and on a shared server the conservative answer is the right default. This is a moderation surface Ragnarok's Wrath never had, and it is listed as unresolved rather than quietly assumed &mdash; because the failure mode is not a bug report, it is somebody's evening.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-closed">closing</span>
+    </div>
+    <div class="col">
+      <h2>The escape hatch stays closed</h2>
+      <p>When a feature is hard to make legible, there is always one move available: draw it on the screen. Put the distance in a corner. Add a little arrow. It works every time, and it is how every mod of this kind ends up as a HUD with a story attached.</p>
+      <p>So the rule for this mod is written down before the first line of code: <strong>when something is hard to see, make it bigger or louder &mdash; never draw it.</strong> Taller column. Brighter fire. A sound that carries past the fog. If none of those work, the feature does not ship.</p>
+      <p>That is a constraint that costs something, and it is the entire reason the mod is worth building.</p>
+    </div>
+  </section>
+
+  <div class="closing">
+    <span>Raven Iron &middot; Cairn &middot; design document</span>
+    <span>Engine facts decompiled from the shipping assembly, 2026-09-01</span>
+    <span>Nothing built. Task 0 is a measurement.</span>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var DENSITIES = [
+      { d: 0.001, hue: "--fog-1", label: "0.001" },
+      { d: 0.004, hue: "--fog-2", label: "0.004" },
+      { d: 0.010, hue: "--fog-3", label: "0.010" }
+    ];
+
+    var W = 760, H = 320;
+    var M = { top: 18, right: 24, bottom: 42, left: 52 };
+    var X_MAX = 900, plotW = W - M.left - M.right, plotH = H - M.top - M.bottom;
+
+    function t(density, dist) { var x = density * dist; return Math.exp(-(x * x)); }
+    function px(dist) { return M.left + (dist / X_MAX) * plotW; }
+    function py(val) { return M.top + (1 - val) * plotH; }
+    function css(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+    var svg = document.getElementById("chart");
+    var tip = document.getElementById("tip");
+
+    function draw() {
+      var grid = css("--grid"), ink3 = css("--ink-3"), ember = css("--ember");
+      var parts = [];
+
+      // horizontal gridlines + y labels
+      [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+        var y = py(v);
+        parts.push('<line x1="' + M.left + '" y1="' + y + '" x2="' + (W - M.right) + '" y2="' + y +
+                   '" stroke="' + grid + '" stroke-width="1"/>');
+        parts.push('<text x="' + (M.left - 10) + '" y="' + (y + 4) + '" text-anchor="end" fill="' + ink3 +
+                   '" font-family="IBM Plex Mono, monospace" font-size="11">' + (v * 100) + '%</text>');
+      });
+
+      // x ticks
+      [0, 200, 400, 600, 800].forEach(function (d) {
+        parts.push('<text x="' + px(d) + '" y="' + (H - M.bottom + 20) + '" text-anchor="middle" fill="' + ink3 +
+                   '" font-family="IBM Plex Mono, monospace" font-size="11">' + d + '</text>');
+      });
+      parts.push('<text x="' + (M.left + plotW / 2) + '" y="' + (H - 6) + '" text-anchor="middle" fill="' + ink3 +
+                 '" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.2">DISTANCE (METRES)</text>');
+
+      // the 400 m question
+      parts.push('<line x1="' + px(400) + '" y1="' + M.top + '" x2="' + px(400) + '" y2="' + (M.top + plotH) +
+                 '" stroke="' + ember + '" stroke-width="1.5" stroke-dasharray="3 4"/>');
+      parts.push('<text x="' + (px(400) + 8) + '" y="' + (M.top + 13) + '" fill="' + ember +
+                 '" font-family="IBM Plex Mono, monospace" font-size="11">400 m</text>');
+
+      // curves
+      DENSITIES.forEach(function (s) {
+        var colour = css(s.hue), pts = [];
+        for (var d = 0; d <= X_MAX; d += 6) {
+          pts.push((d === 0 ? "M" : "L") + px(d).toFixed(1) + " " + py(t(s.d, d)).toFixed(1));
+        }
+        parts.push('<path d="' + pts.join(" ") + '" fill="none" stroke="' + colour +
+                   '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>');
+
+        // direct label at the curve's own half-contrast point - well separated in x
+        var half = Math.sqrt(Math.LN2) / s.d;
+        if (half <= X_MAX) {
+          parts.push('<circle cx="' + px(half).toFixed(1) + '" cy="' + py(0.5).toFixed(1) +
+                     '" r="3.5" fill="' + colour + '"/>');
+          parts.push('<text x="' + (px(half) + 8) + '" y="' + (py(0.5) - 8) + '" fill="' + css("--ink-2") +
+                     '" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="500">' + s.label + '</text>');
+        }
+      });
+
+      // axis
+      parts.push('<line x1="' + M.left + '" y1="' + (M.top + plotH) + '" x2="' + (W - M.right) + '" y2="' +
+                 (M.top + plotH) + '" stroke="' + ink3 + '" stroke-width="1"/>');
+
+      svg.innerHTML = parts.join("");
+    }
+
+    function buildLegend() {
+      var legend = document.getElementById("legend");
+      legend.innerHTML = DENSITIES.map(function (s) {
+        return '<span><i style="background:' + css(s.hue) + '"></i>density ' + s.label + '</span>';
+      }).join("");
+    }
+
+    function buildTable() {
+      var body = document.getElementById("tableBody");
+      body.innerHTML = DENSITIES.map(function (s) {
+        var horizon = Math.sqrt(-Math.log(0.1)) / s.d;
+        var cells = [100, 200, 400, 800].map(function (d) {
+          return '<td class="num">' + (t(s.d, d) * 100).toFixed(1) + '%</td>';
+        }).join("");
+        return '<tr><td class="num">' + s.label + '</td>' + cells +
+               '<td class="num">' + Math.round(horizon) + ' m</td></tr>';
+      }).join("");
+    }
+
+    var hover = null;
+
+    function onMove(ev) {
+      var rect = svg.getBoundingClientRect();
+      var scale = W / rect.width;
+      var xPix = (ev.clientX - rect.left) * scale;
+      if (xPix < M.left || xPix > W - M.right) { return onLeave(); }
+
+      var dist = Math.round(((xPix - M.left) / plotW) * X_MAX);
+      if (hover) { hover.remove(); hover = null; }
+
+      var ns = "http://www.w3.org/2000/svg";
+      var g = document.createElementNS(ns, "g");
+      var line = document.createElementNS(ns, "line");
+      line.setAttribute("x1", px(dist)); line.setAttribute("x2", px(dist));
+      line.setAttribute("y1", M.top); line.setAttribute("y2", M.top + plotH);
+      line.setAttribute("stroke", css("--ink-3"));
+      line.setAttribute("stroke-width", "1");
+      g.appendChild(line);
+
+      DENSITIES.forEach(function (s) {
+        var dot = document.createElementNS(ns, "circle");
+        dot.setAttribute("cx", px(dist));
+        dot.setAttribute("cy", py(t(s.d, dist)));
+        dot.setAttribute("r", "4.5");
+        dot.setAttribute("fill", css(s.hue));
+        dot.setAttribute("stroke", css("--surface"));
+        dot.setAttribute("stroke-width", "2");
+        g.appendChild(dot);
+      });
+
+      svg.appendChild(g);
+      hover = g;
+
+      tip.innerHTML = "<u>" + dist + " m</u><br>" + DENSITIES.map(function (s) {
+        return esc(s.label) + " &nbsp;" + (t(s.d, dist) * 100).toFixed(1) + "%";
+      }).join("<br>");
+      var anchorY = py(t(DENSITIES[0].d, dist)) / scale;
+      var shellW = svg.parentNode.clientWidth;
+      tip.dataset.on = "1";
+      // Flip below the point near the top of the plot: the shell clips vertical overflow.
+      tip.dataset.below = anchorY < 76 ? "1" : "0";
+      tip.style.left = Math.min(Math.max(px(dist) / scale, 64), shellW - 64) + "px";
+      tip.style.top = anchorY + "px";
+    }
+
+    function onLeave() {
+      if (hover) { hover.remove(); hover = null; }
+      tip.dataset.on = "0";
+    }
+
+    function render() { draw(); buildLegend(); }
+
+    render();
+    buildTable();
+
+    svg.addEventListener("mousemove", onMove);
+    svg.addEventListener("mouseleave", onLeave);
+
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      if (mq.addEventListener) { mq.addEventListener("change", render); }
+    }
+    new MutationObserver(render).observe(document.documentElement, {
+      attributes: true, attributeFilter: ["data-theme"]
+    });
+  })();
+</script>

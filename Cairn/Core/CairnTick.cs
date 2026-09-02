@@ -21,10 +21,9 @@ namespace RavenIron.Cairn.Core
     /// left resumes next frame from where the cursor stopped. The cursor never resets to
     /// zero, so no system can starve another.
     ///
-    /// Zero systems are registered today. The role line below still prints, deliberately:
-    /// a proof-of-life line that only appears once there is work to do cannot distinguish
-    /// "loaded and idle" from "never loaded", which is the exact ambiguity this studio
-    /// spends its debugging round-trips on.
+    /// The role line prints unconditionally, deliberately: a proof-of-life line that only
+    /// appears once there is work to do cannot distinguish "loaded and idle" from "never
+    /// loaded", which is the exact ambiguity this studio spends its debugging round-trips on.
     /// </summary>
     public class CairnTick : MonoBehaviour
     {
@@ -82,6 +81,10 @@ namespace RavenIron.Cairn.Core
 
             if (!ModConfig.Enabled.Value) return;
 
+            // Both sides: a client must be listening before the first broadcast arrives, and
+            // registration is cheap and idempotent once ZRoutedRpc exists.
+            Net.LandmarkSync.EnsureRegistered();
+
             // The ledger lives on the authority. A pure client renders what it is told and
             // simulates nothing.
             if (!Cairn.IsSimulationAuthority()) return;
@@ -98,6 +101,7 @@ namespace RavenIron.Cairn.Core
             // console with no system registered at all, and an unsaved change is invisible
             // until the next restart loses it.
             MaybeAutosave(now);
+            MaybeBroadcastBeacons(now);
 
             if (_systems.Count == 0) return;
 
@@ -153,6 +157,24 @@ namespace RavenIron.Cairn.Core
             Persistence.Save();
         }
 
+        private static float _lastBeaconSend;
+
+        /// <summary>
+        /// Absolute, unconditional, on a cadence. A client that joined a second ago is right
+        /// within one interval, and a dropped packet heals itself with the next — which a
+        /// change-triggered push could never promise.
+        /// </summary>
+        private static void MaybeBroadcastBeacons(float now)
+        {
+            if (!ModConfig.EnableBeacons.Value) return;
+
+            float interval = ModConfig.BeaconSyncSeconds.Value;
+            if (now - _lastBeaconSend < interval) return;
+
+            _lastBeaconSend = now;
+            Net.LandmarkSync.Broadcast(ModConfig.BeaconMaxCount.Value);
+        }
+
         private static void InitialiseSystems()
         {
             // Load stored landmarks before any system reads them. Never throws; a missing or
@@ -187,6 +209,7 @@ namespace RavenIron.Cairn.Core
             _initialised = false;
             _roleLogged = false;
             _lastSave = 0f;
+            _lastBeaconSend = 0f;
         }
     }
 }

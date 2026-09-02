@@ -88,6 +88,12 @@ namespace RavenIron.Cairn
 
             RegisterSystems();
 
+            // Visuals exist only where something renders. GraphicsDeviceType.Null is the
+            // headless tell that survives compiling against client reference DLLs, and it is
+            // decided here — before ZNet exists — so a dedicated server never even creates
+            // the component.
+            if (HasRenderer) gameObject.AddComponent<Visuals.Beacon>();
+
             // Proof of life. A silent success and a silent no-op are indistinguishable from
             // outside the game, so this line exists before there is anything to report.
             Log.LogInfo(

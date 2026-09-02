@@ -40,6 +40,17 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<float>  PileDriftMeters;
         public static ConfigEntry<int>    StonePileStoneCost;
 
+        // ---- The light ------------------------------------------------------------
+        public static ConfigEntry<bool>  EnableBeacons;
+        public static ConfigEntry<float> BeaconSyncSeconds;
+        public static ConfigEntry<int>   BeaconMaxCount;
+        public static ConfigEntry<float> BeaconMaxDistanceMeters;
+        public static ConfigEntry<float> BeaconAngularSize;
+        public static ConfigEntry<float> BeaconMinSizeMeters;
+        public static ConfigEntry<float> BeaconMaxSizeMeters;
+        public static ConfigEntry<float> BeaconHeightMeters;
+        public static ConfigEntry<bool>  BeaconOcclusion;
+
         public static void Bind(ConfigFile config)
         {
             Enabled = config.Bind(
@@ -162,6 +173,70 @@ namespace RavenIron.Cairn.Config
                     "existed to solve stopped existing, and the right move was to hand vanilla " +
                     "back. Kept as a switch for anyone who prefers heaps to stacks.",
                     new AcceptableValueRange<int>(0, 100)));
+
+            EnableBeacons = config.Bind(
+                "4 - The light", "EnableBeacons", true,
+                "Draw a light on top of every cairn. Client-side and purely visual: turning it " +
+                "off changes nothing the server knows, and the ledger keeps recording places.");
+
+            BeaconSyncSeconds = config.Bind(
+                "4 - The light", "BeaconSyncSeconds", 15f,
+                new ConfigDescription(
+                    "How often the server broadcasts every lit cairn to everyone. Absolute " +
+                    "snapshots, sent whether or not anything changed: a delta scheme drifts " +
+                    "forever on one dropped packet, and this heals itself within one cadence.",
+                    new AcceptableValueRange<float>(5f, 120f)));
+
+            BeaconMaxCount = config.Bind(
+                "4 - The light", "BeaconMaxCount", 100,
+                new ConfigDescription(
+                    "Most cairns carried in one broadcast. A bound on the packet, not a limit " +
+                    "anyone should reach.",
+                    new AcceptableValueRange<int>(1, 500)));
+
+            BeaconMaxDistanceMeters = config.Bind(
+                "4 - The light", "BeaconMaxDistanceMeters", 800f,
+                new ConfigDescription(
+                    "How far a beacon can be seen before it fades out entirely.",
+                    new AcceptableValueRange<float>(50f, 4000f)));
+
+            BeaconAngularSize = config.Bind(
+                "4 - The light", "BeaconAngularSize", 0.03f,
+                new ConfigDescription(
+                    "THE reason a beacon is visible at range. The glow is scaled BY DISTANCE, " +
+                    "so it holds roughly constant size on screen instead of shrinking away — " +
+                    "0.03 means a 12m glow at 400m, about 1.7 degrees, which is a clear point " +
+                    "of light rather than a smudge. A fixed-size glow would be the wrong shape " +
+                    "of thing entirely.",
+                    new AcceptableValueRange<float>(0.005f, 0.2f)));
+
+            BeaconMinSizeMeters = config.Bind(
+                "4 - The light", "BeaconMinSizeMeters", 1.5f,
+                new ConfigDescription(
+                    "Floor on the glow's world size, so standing next to a cairn does not put " +
+                    "a speck on the stones.",
+                    new AcceptableValueRange<float>(0.2f, 20f)));
+
+            BeaconMaxSizeMeters = config.Bind(
+                "4 - The light", "BeaconMaxSizeMeters", 14f,
+                new ConfigDescription(
+                    "Ceiling on the glow's world size, so a distant beacon stays a point of " +
+                    "light rather than becoming a wall of it.",
+                    new AcceptableValueRange<float>(1f, 100f)));
+
+            BeaconHeightMeters = config.Bind(
+                "4 - The light", "BeaconHeightMeters", 1.2f,
+                new ConfigDescription(
+                    "How far above the cairn's crown the light sits.",
+                    new AcceptableValueRange<float>(0f, 10f)));
+
+            BeaconOcclusion = config.Bind(
+                "4 - The light", "BeaconOcclusion", true,
+                "Terrain hides a beacon. LEAVE THIS ON. A glow that shines through a mountain " +
+                "is not a beacon, it is a waypoint marker in a costume, and house rule A " +
+                "forbids exactly that — a ridge between you and a cairn should mean you have " +
+                "to move, which is the difference between navigating and being told. Off is " +
+                "for diagnosing whether a beacon is missing or merely hidden.");
         }
     }
 }

@@ -4,7 +4,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>Cairn</AssemblyName>
     <RootNamespace>RavenIron.Cairn</RootNamespace>
-    <Version>0.4.4</Version>
+    <Version>0.5.0</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -71,6 +71,11 @@
 
     <Reference Include="UnityEngine">
       <HintPath>$(LibsDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Physics: the beacon raycasts terrain so a light can be hidden by a ridge. -->
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(LibsDir)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">

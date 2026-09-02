@@ -337,6 +337,8 @@ is world-scoped by uid; `.bak` rotated (65 bytes, the previous header-only file)
 `.tmp` orphaned; and the first bytes are `76 65 72` — "ver", **no BOM**, which is the
 shipping writer behaving on a real world exactly as the harness asserts.
 
+**VERIFIED LIVE 2026-09-02, the stone side too.** Five `stone_pile` pieces became one cairn; a pile paired with a sign keyed the landmark on the SIGN and kept its firstSeen; narrowing StonePrefabs unlit that cairn without erasing its name; and an unnamed pile persisted through a save as `52 42 18 ... unknown 1 51.69094 41.57542 18.4799442` with an EMPTY name field - the exact row the sparseness rule would have dropped before mutation testing caught it. The 10-stone recipe override applied and announced itself.
+
 **Still owed:** the PRUNE path — break the sign, and a completed rotation should report
 `1 pruned`. It is the half that deletes, so it is the half to trust least. Also: a store
 surviving a server restart with values intact, two worlds producing two stores in the same

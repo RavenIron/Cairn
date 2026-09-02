@@ -42,6 +42,7 @@ namespace Cairn.Tests
                 EscapeTests();
                 FormatParseTests();
                 SignReadingTests();
+                PileDetectionTests();
                 StoreTests();
                 PersistenceTests();
             }
@@ -252,6 +253,80 @@ namespace Cairn.Tests
 
             SignReading.TryRead(new string('x', Landmark.MaxNameLength + 50), "host", out name, out _);
             Equal(Landmark.MaxNameLength, name.Length, "an over-long sign is bounded before it is stored");
+        }
+
+        // ---- pile detection --------------------------------------------------------------
+
+        private static void PileDetectionTests()
+        {
+            Section("PileDetection");
+
+            const float link = 2.5f, extent = 4f;
+            const int min = 3, max = 12;
+
+            // A cairn: a short tight stack.
+            var stack = new List<Vector3> {
+                new Vector3(0f, 0f, 0f), new Vector3(0.3f, 0.8f, 0.1f), new Vector3(0f, 1.6f, 0.2f)
+            };
+            List<PileDetection.Pile> piles = PileDetection.Find(stack, link, min, max, extent);
+            Equal(1, piles.Count, "a tight stack of three is a cairn");
+            Equal(3, piles[0].Pieces, "all three stones belong to it");
+            Check(Math.Abs(piles[0].Top.y - 1.6f) < 0.001f, "the light sits at the height of the topmost stone");
+            Check(Math.Abs(piles[0].Top.x - 0.1f) < 0.01f, "the light sits over the centre of the footprint");
+
+            // Too few.
+            Equal(0, PileDetection.Find(
+                new List<Vector3> { new Vector3(0f, 0f, 0f), new Vector3(0f, 0.8f, 0f) },
+                link, min, max, extent).Count, "two stones are not a cairn");
+
+            // A WALL. Same piece count as a cairn, spread out — footprint is what tells them
+            // apart, and piece count alone never could.
+            var wall = new List<Vector3> {
+                new Vector3(0f, 0f, 0f), new Vector3(2f, 0f, 0f), new Vector3(4f, 0f, 0f),
+                new Vector3(6f, 0f, 0f), new Vector3(8f, 0f, 0f)
+            };
+            Equal(0, PileDetection.Find(wall, link, min, max, extent).Count,
+                  "a five-piece wall is not a cairn, despite a legal piece count");
+
+            // A house: too many pieces AND too wide.
+            var house = new List<Vector3>();
+            for (int x = 0; x < 5; x++)
+                for (int z = 0; z < 5; z++)
+                    house.Add(new Vector3(x * 2f, 0f, z * 2f));
+            Equal(0, PileDetection.Find(house, link, min, max, extent).Count, "a stone house is not a cairn");
+
+            // Two cairns far apart stay two.
+            var pair = new List<Vector3> {
+                new Vector3(0f, 0f, 0f), new Vector3(0.2f, 0.8f, 0f), new Vector3(0f, 1.6f, 0.2f),
+                new Vector3(50f, 0f, 50f), new Vector3(50.2f, 0.8f, 50f), new Vector3(50f, 1.6f, 50.2f)
+            };
+            Equal(2, PileDetection.Find(pair, link, min, max, extent).Count,
+                  "two distant stacks are two cairns");
+
+            // Single-linkage transitivity: a chain of stones each within the link radius is
+            // ONE cluster, so a long low chain is measured — and rejected — as one wall.
+            var chain = new List<Vector3>();
+            for (int i = 0; i < 6; i++) chain.Add(new Vector3(i * 2f, 0f, 0f));
+            Equal(0, PileDetection.Find(chain, link, min, max, extent).Count,
+                  "a chain links into one oversized cluster rather than several small ones");
+
+            Equal(0, PileDetection.Find(null, link, min, max, extent).Count, "null input is not a crash");
+            Equal(0, PileDetection.Find(new List<Vector3>(), link, min, max, extent).Count, "no stones, no cairns");
+            Equal(0, PileDetection.Find(stack, 0f, min, max, extent).Count, "a zero link radius finds nothing");
+
+            // --- pairing a pile with the sign that names it ---------------------------------
+            var top = new Vector3(10f, 5f, 10f);
+            var signs = new List<Vector3> { new Vector3(40f, 5f, 40f), new Vector3(12f, 1f, 10f) };
+            Equal(1, PileDetection.NearestSign(top, signs, 6f), "the nearer sign names the cairn");
+
+            // XZ-planar on purpose: a sign set into the side of a cairn sits well below its
+            // top, and a 3D check would push it out of reach for no visible reason.
+            Equal(1, PileDetection.NearestSign(top, signs, 3f),
+                  "a sign four metres below still names the cairn it is set into");
+
+            Equal(-1, PileDetection.NearestSign(top, new List<Vector3> { new Vector3(40f, 5f, 40f) }, 6f),
+                  "a distant sign does not name it — an unnamed cairn is still a cairn");
+            Equal(-1, PileDetection.NearestSign(top, null, 6f), "no signs at all is not a crash");
         }
 
         // ---- store ----------------------------------------------------------------------

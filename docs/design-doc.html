@@ -465,9 +465,9 @@
 <div class="page">
 
   <header class="masthead">
-    <div class="eyebrow">Raven Iron &middot; design document &middot; 2026-09-01</div>
+    <div class="eyebrow">Raven Iron &middot; design document &middot; revised 2026-09-02</div>
     <h1>Cairn</h1>
-    <p class="deck">On a world with no map and no portals, knowing where you are is knowledge. Cairn makes that knowledge something you can build, light, and lose &mdash; without ever drawing it on the screen.</p>
+    <p class="deck">On a world with no map and no portals, knowing where you are is knowledge. Cairn makes that knowledge something you can stack, light, and lose &mdash; without ever drawing it on the screen.</p>
 
     <div class="readings">
       <div class="reading">
@@ -479,8 +479,8 @@
         <span>The raven's altitude floor. <em>Absent on every coastline.</em></span>
       </div>
       <div class="reading">
-        <b>95 px</b>
-        <span>A 40&nbsp;m column at 400&nbsp;m, at 65&deg; FOV. <em>Geometry is not the problem.</em></span>
+        <b>4 m</b>
+        <span>The footprint that separates a cairn from a wall. <em>Shape, not piece count.</em></span>
       </div>
       <div class="reading">
         <b>&mdash;</b>
@@ -573,7 +573,7 @@ if (ZoneSystem.instance.GetSolidHeight(candidate, out height, out normal, out go
     </div>
     <div class="col">
       <h2>The beacon must not be an object</h2>
-      <p>What survives is a lit column at a named place, visible across a valley or from the water. The trap here is subtler than the smoke gate, because the naive implementation looks right and fails silently at range.</p>
+      <p>What survives is a light burning at a marked place, visible across a valley or from the water. The trap here is subtler than the smoke gate, because the naive implementation looks right and fails silently at range.</p>
       <p>Valheim streams objects by zone. Whether a client instantiates a thing at all depends on a flag baked into its prefab:</p>
 
       <figure class="evidence">
@@ -586,7 +586,7 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
       </figure>
 
       <p>Vanilla fireplaces are near-only, so at beacon range <strong>the fire object is not instantiated on the client at all</strong>. And even a distant-flagged object is sent last and starves on a busy server. Any design that says "make the fire visible from further away" is fighting the object streamer, and loses.</p>
-      <p><strong>Decision: the beacon is drawn client-side from synced state, never from a networked object.</strong> The server holds the truth &mdash; there is a lit beacon at these coordinates &mdash; and pushes it; the client draws a column there whether or not a single ZDO from that zone is loaded. This is not a new pattern: it is the path Ragnarok's Wrath already runs and verified in-game for plague fog. Existence is server truth, rendering is local, and the two never depend on each other.</p>
+      <p><strong>Decision: the beacon is drawn client-side from synced state, never from a networked object.</strong> The server holds the truth &mdash; there is a lit cairn at these coordinates &mdash; and pushes it; the client draws the light there whether or not a single ZDO from that zone is loaded. This is not a new pattern: it is the path Ragnarok's Wrath already runs and verified in-game for plague fog. Existence is server truth, rendering is local, and the two never depend on each other.</p>
     </div>
   </section>
 
@@ -626,46 +626,65 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
     </figure>
 
     <div class="col">
-      <p style="margin-top:1.5rem">The probe in <code>tools\probe\</code> logs the live values across Clear, Misty, Rain and ThunderStorm for one in-game day. <strong>If Clear's 10% horizon falls short of 400&nbsp;m, the beacon is not the primary channel and this document needs rewriting before the code exists.</strong> That is why the measurement is task 0 and not a detail to be checked later.</p>
+      <p style="margin-top:1.5rem">The probe in <code>tools\probe\</code> logs the live values across Clear, Misty, Rain and ThunderStorm for one in-game day. <strong>If Clear's 10% horizon falls short of 400&nbsp;m, the beacon is not the primary channel and this document needs rewriting before the code exists.</strong></p>
       <p>If it falls short only in fog and rain, that is almost certainly the right behaviour rather than a defect &mdash; a beacon lost in weather is honest &mdash; but it has to be a decision, not a surprise.</p>
+      <p><strong>One honest caveat about this whole section.</strong> It was written when the beacon was a column of grey smoke, which fog erases by definition &mdash; both are the same pale wash and contrast is all a plume has. A <em>light</em> is a different proposition: a bright point against a dark hillside carries where smoke dies, and at night it carries a long way indeed. So the measurement above may have stopped being the gate it was designed to be. That is a reason to take it deliberately and re-read the answer against the new design &mdash; not a reason to quietly let it lapse, which is how a gate becomes a formality.</p>
     </div>
   </section>
 
   <section>
     <div class="rail">
-      <span class="mark mark-measured">measured</span>
-      <span class="rail-note">Why the column should be tall and thin, not wide.</span>
+      <span class="mark mark-closed">reversed</span>
+      <span class="rail-note">Owner's call, 2026-09-02. This document argued the opposite.</span>
     </div>
     <div class="col">
-      <h2>The geometry is on our side</h2>
-      <p><code>GameCamera.m_fov</code> is 65, and Unity's <code>fieldOfView</code> is <em>vertical</em>. That single fact converts the whole legibility question into arithmetic:</p>
+      <h2>A cairn is a pile you build</h2>
+      <p>The original design made a named sign the landmark and a column of smoke the beacon. It was wrong in a way that is obvious once said aloud: a cairn is a <em>pile of rocks with a light on top</em>. That is what the word means, and it does both jobs at once &mdash; the thing you steer by at distance is the same thing you read when you arrive.</p>
+      <p>So the pile marks the place and carries the light. A sign names it. Both halves stand alone: a sign with no pile is a named place without a light, a pile with no sign is a lit waymark nobody has named yet, and the ledger holds both.</p>
+      <p><strong>No new prefabs, still.</strong> A mod that adds one must ship server-side or <code>ZNetScene.CreateObjectsSorted</code> calls <code>DestroyZDO</code> on every hash it cannot resolve &mdash; silent data loss, in someone else's world. So the pile is not a piece we provide. It is a pattern we <em>recognise</em> in what players already build out of ordinary stone.</p>
+      <p>Which raises the only hard question in the mod: how do you tell a waymark from a wall? Not by counting pieces &mdash; a tidy five-piece wall has a perfectly respectable piece count. <strong>By footprint</strong>, because that is the thing a cairn cannot fake:</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th scope="col">A 40&nbsp;m column at</th><th scope="col">Angular height</th><th scope="col">On a 1080p screen</th></tr>
+            <tr><th scope="col">What was built</th><th scope="col">Pieces</th><th scope="col">Footprint</th><th scope="col">Verdict</th></tr>
           </thead>
           <tbody>
-            <tr><td class="num">100 m</td><td class="num">21.8&deg;</td><td class="num">362 px</td></tr>
-            <tr><td class="num">200 m</td><td class="num">11.3&deg;</td><td class="num">188 px</td></tr>
-            <tr><td class="num">400 m</td><td class="num">5.7&deg;</td><td class="num">95 px</td></tr>
-            <tr><td class="num">800 m</td><td class="num">2.9&deg;</td><td class="num">48 px</td></tr>
+            <tr><td>A stacked waymark</td><td class="num">3</td><td class="num">0.4 m</td><td>cairn</td></tr>
+            <tr><td>A low wall</td><td class="num">5</td><td class="num">8 m</td><td>not a cairn</td></tr>
+            <tr><td>A stone house</td><td class="num">25</td><td class="num">8 m</td><td>not a cairn</td></tr>
           </tbody>
         </table>
       </div>
-      <p>A 95&nbsp;px vertical line at 400&nbsp;m is unmistakably a landmark. Width earns far less: three metres of thickness is about seven pixels at that range, eight metres about nineteen. <strong>Height buys legibility linearly; width past roughly eight metres is wasted.</strong> Build it tall and thin, like a real signal fire, and spend the particle budget on reach rather than bulk.</p>
+      <p>Every row there is a test, and removing the footprint rule fails two of them. Grouping runs as single-linkage clustering through a spatial grid rather than an all-pairs sweep &mdash; a world's stone runs to thousands of pieces, and O(n&sup2;) inside a tick is how a sweep becomes a stutter.</p>
+      <p>The pleasing part is what falls out for free: everyone's cairn looks different, none of them are ours, and with the mod uninstalled the whole thing degrades into exactly what it appears to be.</p>
     </div>
   </section>
 
   <section>
     <div class="rail">
       <span class="mark mark-closed">decided</span>
-      <span class="rail-note">No new prefabs, ever &mdash; the CreateObjectsSorted landmine.</span>
+      <span class="rail-note">The pile marks it. The sign says what it is.</span>
     </div>
     <div class="col">
-      <h2>A landmark is a sign somebody wrote</h2>
-      <p>Cairn adds no prefabs. A mod that adds one must ship server-side or <code>ZNetScene.CreateObjectsSorted</code> calls <code>DestroyZDO</code> on every hash it cannot resolve &mdash; silent data loss, in someone else's world. That is a line this studio does not cross for a cosmetic.</p>
-      <p>Which turns out to be a gift, because vanilla already ships the perfect anchor. <code>Sign</code> is a <code>TextReceiver</code>: text persisted in the ZDO with a revision counter, the author captured as a platform id, a 50-character limit, and the game's own text-entry flow. A named sign <em>is</em> a landmark.</p>
-      <p>Better still, players build the cairn themselves out of ordinary stone. Everyone's looks different, none of them are ours, and with the mod uninstalled the whole thing degrades into exactly what it appears to be: a pile of rocks with a sign on it. <strong>Cairn notices what players build. It never seeds the world with points of interest.</strong></p>
+      <h2>And a sign is what gives it a name</h2>
+      <p>A light tells you <em>there</em>. It cannot tell you <em>what</em>. Vanilla already ships the thing that can: <code>Sign</code> is a <code>TextReceiver</code> with its text persisted in the ZDO under a revision counter, the author captured as a platform id, a 50-character limit, and the game's own text-entry flow. Set one into the side of a cairn and the place has a name.</p>
+      <p>Pairing is deliberately forgiving and deliberately flat &mdash; the nearest named sign within a few metres, measured on the horizontal plane only. A sign set into a cairn's flank sits well below its crown, and a 3D distance check would push it out of reach for no reason a player could see. That is not a hypothetical: the same mistake made Ragnarok's Wrath's announcements invisible to anyone standing on a hill, and it took two rounds of fixing the wrong end to find.</p>
+      <p><strong>Cairn notices what players build. It never seeds the world with points of interest.</strong> A world where nobody has stacked anything has no landmarks, and that is correct.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rail">
+      <span class="mark mark-open">retracted</span>
+      <span class="rail-note">Kept because the mistake is the lesson.</span>
+    </div>
+    <div class="col">
+      <h2>A measurement that was wrong</h2>
+      <p>This document's whole claim is that the design was settled by measurement rather than taste. So here is the measurement that lied, and what gave it away.</p>
+      <p>Prefab names live in asset bundles, not the assemblies, so they cannot be decompiled &mdash; and the sweep needs to know what a sign is called. A ZDO stores its prefab as a stable hash of that name, and a world save stores ZDOs. So: compute the hash of each candidate, search two real saves for those four bytes, and read off which names are real. It worked. <code>sign</code> and <code>sign_notext</code> both appeared; three other guesses did not; a known-good prefab appeared as a control. The result was written up as confirmed.</p>
+      <p>It was wrong. Re-run against a freshly saved test world, <strong>the same control returned zero</strong>, and no plain text appeared in that file either. The save format defeats raw byte scanning, so the original hits were never prefab data at all.</p>
+      <p>The tell had been sitting in the first run and was rationalised away: the control prefab returned one and two hits in worlds that certainly contained more of it than that. <strong>A control that disagrees with itself between two files has failed, whatever the other rows say.</strong> Reasoning about why the count seemed low is exactly the move that turns a broken instrument into a confident wrong answer.</p>
+      <p>The replacement does not need trusting: a console command that reads the loaded scene's own prefab list. There was always an authority available; the mistake was preferring a clever offline measurement to asking it.</p>
     </div>
   </section>
 
@@ -712,15 +731,15 @@ if (toSync.Count &lt; 10) { /* ... append the distant list ... */ }</pre>
     <div class="col">
       <h2>The escape hatch stays closed</h2>
       <p>When a feature is hard to make legible, there is always one move available: draw it on the screen. Put the distance in a corner. Add a little arrow. It works every time, and it is how every mod of this kind ends up as a HUD with a story attached.</p>
-      <p>So the rule for this mod is written down before the first line of code: <strong>when something is hard to see, make it bigger or louder &mdash; never draw it.</strong> Taller column. Brighter fire. A sound that carries past the fog. If none of those work, the feature does not ship.</p>
-      <p>That is a constraint that costs something, and it is the entire reason the mod is worth building.</p>
+      <p>So the rule for this mod was written down before the first line of code: <strong>when something is hard to see, make it bigger or louder &mdash; never draw it.</strong> A taller stack. A brighter fire. A sound that carries past the fog. If none of those work, the feature does not ship.</p>
+      <p>That is a constraint that costs something, and it is the entire reason the mod is worth building. Everything in this document that changed &mdash; the anchor, the beacon, one retracted measurement &mdash; changed underneath that rule and not around it.</p>
     </div>
   </section>
 
   <div class="closing">
     <span>Raven Iron &middot; Cairn &middot; design document</span>
-    <span>Engine facts decompiled from the shipping assembly, 2026-09-01</span>
-    <span>Nothing built. Task 0 is a measurement.</span>
+    <span>Engine facts decompiled from the shipping assembly, 2026-09-01 and 02</span>
+    <span>Skeleton and ledger verified on a dedicated server. The light is not built.</span>
   </div>
 </div>
 

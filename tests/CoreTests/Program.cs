@@ -41,6 +41,7 @@ namespace Cairn.Tests
                 NameTests();
                 EscapeTests();
                 FormatParseTests();
+                SignReadingTests();
                 StoreTests();
                 PersistenceTests();
             }
@@ -213,6 +214,44 @@ namespace Cairn.Tests
             {
                 System.Threading.Thread.CurrentThread.CurrentCulture = previous;
             }
+        }
+
+        // ---- sign reading ---------------------------------------------------------------
+
+        private static void SignReadingTests()
+        {
+            Section("SignReading");
+
+            // A blank sign is not a place. Vanilla writes nothing under the text key until
+            // someone writes on one, so an unwritten sign arrives here as an empty string —
+            // this is what keeps every freshly built sign out of the ledger.
+            Check(!SignReading.TryRead("", "host", out _, out _), "an unwritten sign is not a landmark");
+            Check(!SignReading.TryRead(null, "host", out _, out _), "a null text is not a landmark");
+            Check(!SignReading.TryRead("   \n\t ", "host", out _, out _),
+                  "a sign of pure whitespace is not a landmark");
+
+            Check(SignReading.TryRead("Two Rocks", "host", out string name, out string author),
+                  "a named sign is a landmark");
+            Equal("Two Rocks", name, "the name comes through");
+            Equal("host", author, "the author comes through");
+
+            SignReading.TryRead("Gull\nCliff", "host", out name, out _);
+            Equal("Gull Cliff", name, "a two-line sign becomes a one-line name");
+
+            SignReading.TryRead("Two Rocks", "", out _, out author);
+            Equal(SignReading.UnknownAuthor, author, "a sign with no author is attributed to nobody");
+
+            SignReading.TryRead("Two Rocks", "   ", out _, out author);
+            Equal(SignReading.UnknownAuthor, author, "a whitespace author is attributed to nobody");
+
+            SignReading.TryRead("Two Rocks", null, out _, out author);
+            Equal(SignReading.UnknownAuthor, author, "a null author does not crash the sweep");
+
+            SignReading.TryRead("Two Rocks", "  76561198000000000  ", out _, out author);
+            Equal("76561198000000000", author, "an author id is trimmed");
+
+            SignReading.TryRead(new string('x', Landmark.MaxNameLength + 50), "host", out name, out _);
+            Equal(Landmark.MaxNameLength, name.Length, "an over-long sign is bounded before it is stored");
         }
 
         // ---- store ----------------------------------------------------------------------

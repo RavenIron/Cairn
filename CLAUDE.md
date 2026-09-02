@@ -15,12 +15,11 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: skeleton verified on a dedicated server; the landmark store is built and tested
-off-game; nothing fills it yet.** The plugin loads, binds config, drives `CairnTick`,
-registers the `cairn` console, loads and autosaves the ledger. Zero systems are registered
-— the sweep that turns signs into landmarks is the next thing to write. Task 0 (the fog
-measurement, `tools\probe\`) is still unrun, and it can still invalidate task 3. See
-**Build order** at the bottom.
+**Status: task 2 is built end to end and tested off-game (105/105); NONE of it has been run
+in-game.** The plugin loads, binds config, drives `CairnTick`, registers the `cairn`
+console, loads and autosaves the ledger, and sweeps sign ZDOs into it. Only the task 1
+skeleton has a live run behind it. Task 0 (the fog measurement, `tools\probe\`) is still
+unrun, and it can still invalidate task 3. See **Build order** at the bottom.
 
 ---
 
@@ -67,7 +66,9 @@ Cairn/                     plugin (net472) — role-aware single DLL
   Core/LandmarkKey.cs      a place, to the nearest metre
   Core/Landmark.cs         one named place; format/parse and the escaping
   Core/LandmarkStore.cs    the ledger in memory; write-behind dirty flag
+  Core/SignReading.cs      is this sign a landmark, and what is it called
   Core/Persistence.cs      world-scoped store on disk; atomic, fail-safe
+  Systems/LandmarkSystem.cs  the sweep: named signs become landmarks
   Patches/Patch_Terminal.cs  the `cairn` console
 tests/CoreTests/           net10 harness; compiles the REAL source against stubs
 docs/design-doc.html       source of the published design document
@@ -80,7 +81,6 @@ libs/                      gitignored; populated by fetch-libs.ps1
 Planned, in build order:
 
 ```
-  Systems/LandmarkSystem.cs  the sign sweep that FILLS the ledger      task 2, next
   Net/LandmarkSync.cs      server-to-client landmark push              task 3
   Visuals/Beacon.cs        client-drawn column; gated on a real GPU    task 3
   Voice/HuginVoice.cs      optional Raven static texts                 task 4
@@ -260,16 +260,23 @@ and `cairn landmarks` / `cairn save` read and flush it.
 fix — header-by-content, the BOM, first-seen preservation, and culture-invariance. Every
 acceptance criterion below is covered by a test EXCEPT the in-game half.
 
-**Still owed:** `Systems/LandmarkSystem.cs`, the sweep that turns a named `Sign` into a
-landmark — nothing populates the ledger in-game yet, so a live run would only ever show
-zero. Ground it on `ZDOMan.GetAllZDOsWithPrefabIterative` (vanilla's own self-chunking walk,
-proven in RW's FarmingSystem) reading `ZDOVars.s_text`, `s_author` and
-`s_authorDisplayName`; sign prefab names belong in CONFIG, not code, because they are data
-about the game's content and a wrong name costs a silent zero matches.
+**The sweep is built too** (`Systems/LandmarkSystem.cs`, registered): it walks sign ZDOs
+with `ZDOMan.GetAllZDOsWithPrefabIterative` — vanilla's own self-chunking traversal, one
+whole prefab per tick — reads `ZDOVars.s_text` and `s_author`, and upserts. Pruning happens
+only when a rotation completes CLEANLY: a sweep that threw halfway has not proved a
+landmark is gone, and deleting on incomplete evidence is how a ledger quietly empties
+itself. `SignReading` holds the accept/reject rule and is covered off-game.
 
-**Then the in-game acceptance:** two worlds produce two stores in the same directory; a
-store survives a restart with values intact; `.bak` rotated, no `.tmp` orphaned; a corrupt
-file quarantines to `.corrupt` and says so at error level.
+**⚠ THE DEFAULT `SignPrefabs` VALUE IS `"sign"` AND IS UNVERIFIED.** Nobody has confirmed
+that is Valheim's actual sign prefab name, and a wrong name costs a silent zero matches —
+the exact failure this codebase keeps paying for. That is why the first completed rotation
+of every session logs its per-prefab counts unconditionally and says so in plain words when
+it found nothing. **Read that line on the first live run before believing anything else.**
+
+**In-game acceptance, still owed:** build and name a sign, watch it appear in
+`cairn landmarks`; break it and watch a completed rotation prune it; two worlds produce two
+stores in the same directory; a store survives a restart with values intact; `.bak`
+rotated, no `.tmp` orphaned; a corrupt file quarantines to `.corrupt` at error level.
 
 **3 — the beacon.** Client-drawn column at synced landmark coordinates, lit state driven by
 a real fire at the site. **Acceptance:** a player stands 400m away on a hillside and *sees*

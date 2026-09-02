@@ -25,6 +25,11 @@ namespace RavenIron.Cairn.Config
         public static ConfigEntry<bool>  VerboseLogging;
         public static ConfigEntry<float> AutosaveIntervalSeconds;
 
+        // ---- Landmarks ------------------------------------------------------------
+        public static ConfigEntry<bool>   EnableLandmarks;
+        public static ConfigEntry<float>  LandmarkIntervalSeconds;
+        public static ConfigEntry<string> SignPrefabs;
+
         public static void Bind(ConfigFile config)
         {
             Enabled = config.Bind(
@@ -50,6 +55,25 @@ namespace RavenIron.Cairn.Config
                     "rather than change-based on purpose: a busy world would otherwise write on " +
                     "every sweep, and an idle one would never write at all.",
                     new AcceptableValueRange<float>(5f, 600f)));
+
+            EnableLandmarks = config.Bind(
+                "2 - Landmarks", "EnableLandmarks", true,
+                "The sweep that turns named signs into landmarks. Off leaves the ledger frozen " +
+                "at whatever it already holds.");
+
+            LandmarkIntervalSeconds = config.Bind(
+                "2 - Landmarks", "LandmarkIntervalSeconds", 45f,
+                new ConfigDescription(
+                    "Seconds between sweeps of ONE sign prefab. 45 by default to stagger against " +
+                    "AwayFromHome's 60s full-index rescan.",
+                    new AcceptableValueRange<float>(5f, 600f)));
+
+            SignPrefabs = config.Bind(
+                "2 - Landmarks", "SignPrefabs", "sign",
+                "Comma-separated prefab names treated as signs. CONFIG rather than code because " +
+                "these are data about the game's content: they drift with game patches and modded " +
+                "pieces, and a wrong name costs a silent zero matches. The first sweep of each " +
+                "session logs its per-prefab counts so a wrong name is visible in the log.");
         }
     }
 }

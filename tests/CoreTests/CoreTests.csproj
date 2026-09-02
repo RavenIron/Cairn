@@ -26,6 +26,7 @@
     <Compile Include="..\..\Cairn\Core\LandmarkKey.cs" />
     <Compile Include="..\..\Cairn\Core\Landmark.cs" />
     <Compile Include="..\..\Cairn\Core\LandmarkStore.cs" />
+    <Compile Include="..\..\Cairn\Core\SignReading.cs" />
     <Compile Include="..\..\Cairn\Core\Persistence.cs" />
     <Compile Include="..\..\Cairn\Config\ModConfig.cs" />
   </ItemGroup>

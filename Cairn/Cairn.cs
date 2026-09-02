@@ -89,14 +89,13 @@ namespace RavenIron.Cairn
         }
 
         /// <summary>
-        /// Every system will register here, in one place, ticked in registration order by
-        /// CairnTick's round-robin cursor.
-        ///
-        /// Empty on purpose. Task 2 (the landmark ledger) puts the first entry in it; a
-        /// stub registered now would be a system that exists only to look busy.
+        /// Every system registers here, in one place, ticked in registration order by
+        /// CairnTick's round-robin cursor. Ordering is a mild scheduling hint only — no
+        /// system may depend on another having ticked first within the same frame.
         /// </summary>
         private static void RegisterSystems()
         {
+            CairnTick.Register(new Systems.LandmarkSystem());
         }
 
         private void OnDestroy()

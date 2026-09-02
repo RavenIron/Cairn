@@ -33,7 +33,7 @@ namespace RavenIron.Cairn.Patches
         {
             try
             {
-                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | save", Run);
+                new Terminal.ConsoleCommand("cairn", "Cairn: cairn status | landmarks | prefabs <text> | save", Run);
 
                 if (_confirmed) return;
                 _confirmed = true;
@@ -109,6 +109,21 @@ namespace RavenIron.Cairn.Patches
             }
         }
 
+        /// <summary>
+        /// Every line this console says goes to the screen AND to the log.
+        ///
+        /// `args.Context.AddString` draws to the in-game console and nowhere else, so a
+        /// diagnostic answered that way exists only on one person's monitor. `cairn prefabs`
+        /// was built specifically to carry an answer back to a developer and, on its first
+        /// live run on 2026-09-02, told nobody who could act on it. A console command is an
+        /// instrument; an instrument that leaves no trace is a conversation.
+        /// </summary>
+        private static void Say(Terminal.ConsoleEventArgs args, string line)
+        {
+            args.Context?.AddString(line);
+            Cairn.Log.LogInfo("cairn> " + line);
+        }
+
         private static void Run(Terminal.ConsoleEventArgs args)
         {
             try
@@ -125,17 +140,17 @@ namespace RavenIron.Cairn.Patches
             }
             catch (Exception ex)
             {
-                args.Context?.AddString("cairn: " + ex.Message);
+                Say(args, "cairn: " + ex.Message);
                 Cairn.Log.LogWarning($"cairn console threw: {ex}");
             }
         }
 
         private static void Help(Terminal.ConsoleEventArgs args)
         {
-            args.Context?.AddString("cairn status         — what this process is, and what is running");
-            args.Context?.AddString("cairn landmarks      — every landmark in the ledger");
-            args.Context?.AddString("cairn prefabs <text> — real prefab names containing <text>");
-            args.Context?.AddString("cairn save           — flush the ledger now (authority only)");
+            Say(args, "cairn status         — what this process is, and what is running");
+            Say(args, "cairn landmarks      — every landmark in the ledger");
+            Say(args, "cairn prefabs <text> — real prefab names containing <text>");
+            Say(args, "cairn save           — flush the ledger now (authority only)");
         }
 
         /// <summary>
@@ -160,25 +175,25 @@ namespace RavenIron.Cairn.Patches
             try
             {
                 Type sceneType = AccessTools.TypeByName("ZNetScene");
-                if (sceneType == null) { args.Context?.AddString("cairn: no ZNetScene type."); return; }
+                if (sceneType == null) { Say(args, "cairn: no ZNetScene type."); return; }
 
                 object scene = ReadSingleton(sceneType);
                 if (scene == null)
                 {
-                    args.Context?.AddString("cairn: ZNetScene is not loaded — join or start a world first.");
+                    Say(args, "cairn: ZNetScene is not loaded — join or start a world first.");
                     return;
                 }
 
                 FieldInfo prefabsField = AccessTools.Field(sceneType, "m_prefabs");
                 if (prefabsField == null)
                 {
-                    args.Context?.AddString("cairn: ZNetScene has no m_prefabs — Valheim's API moved.");
+                    Say(args, "cairn: ZNetScene has no m_prefabs — Valheim's API moved.");
                     return;
                 }
 
                 if (!(prefabsField.GetValue(scene) is IEnumerable all))
                 {
-                    args.Context?.AddString("cairn: m_prefabs was not enumerable.");
+                    Say(args, "cairn: m_prefabs was not enumerable.");
                     return;
                 }
 
@@ -194,13 +209,13 @@ namespace RavenIron.Cairn.Patches
                 }
 
                 hits.Sort(StringComparer.OrdinalIgnoreCase);
-                args.Context?.AddString(
+                Say(args, 
                     $"cairn: {hits.Count} of {total} prefab(s) contain \"{filter}\"");
-                foreach (string n in hits) args.Context?.AddString("  " + n);
+                foreach (string n in hits) Say(args, "  " + n);
             }
             catch (Exception ex)
             {
-                args.Context?.AddString("cairn: prefab listing failed: " + ex.Message);
+                Say(args, "cairn: prefab listing failed: " + ex.Message);
             }
         }
 
@@ -232,16 +247,16 @@ namespace RavenIron.Cairn.Patches
 
             if (all.Count == 0)
             {
-                args.Context?.AddString(
+                Say(args, 
                     $"cairn: no landmarks (store loaded={Persistence.IsLoaded}, " +
                     $"authority={Cairn.IsSimulationAuthority()})");
                 return;
             }
 
-            args.Context?.AddString($"cairn: {all.Count.ToString(c)} landmark(s)");
+            Say(args, $"cairn: {all.Count.ToString(c)} landmark(s)");
             foreach (Landmark l in all)
             {
-                args.Context?.AddString(
+                Say(args, 
                     $"  {l.Key}  \"{l.Name}\"  by {l.Author}  first seen " +
                     new DateTime(l.FirstSeenUtcTicks, DateTimeKind.Utc).ToString("u", c));
             }
@@ -255,14 +270,14 @@ namespace RavenIron.Cairn.Patches
         {
             if (!Persistence.IsLoaded)
             {
-                args.Context?.AddString(
+                Say(args, 
                     "cairn: no ledger on this process — the store lives on the server. " +
                     "Type this at the server's own console, or on a listen host.");
                 return;
             }
 
             Persistence.Save(force: true);
-            args.Context?.AddString($"cairn: saved {LandmarkStore.Count.ToString(CultureInfo.InvariantCulture)} landmark(s).");
+            Say(args, $"cairn: saved {LandmarkStore.Count.ToString(CultureInfo.InvariantCulture)} landmark(s).");
         }
 
         /// <summary>
@@ -274,18 +289,18 @@ namespace RavenIron.Cairn.Patches
         {
             var c = CultureInfo.InvariantCulture;
 
-            args.Context?.AddString($"Cairn v{Cairn.PluginVersion}");
-            args.Context?.AddString(
+            Say(args, $"Cairn v{Cairn.PluginVersion}");
+            Say(args, 
                 $"  role       : {CairnTick.Role()} (authority={Cairn.IsSimulationAuthority()}, " +
                 $"dedicated={Cairn.IsDedicated()})");
-            args.Context?.AddString($"  renderer   : {Cairn.HasRenderer}");
-            args.Context?.AddString(
+            Say(args, $"  renderer   : {Cairn.HasRenderer}");
+            Say(args, 
                 $"  tick       : {(CairnTick.WorldSeen ? "running" : "not yet — no world")}, " +
                 $"{CairnTick.SystemCount.ToString(c)} system(s), " +
                 $"budget {ModConfig.TickBudgetMs.Value.ToString("0.##", c)}ms/frame");
-            args.Context?.AddString(
+            Say(args, 
                 $"  enabled    : {ModConfig.Enabled.Value} (verbose={ModConfig.VerboseLogging.Value})");
-            args.Context?.AddString(
+            Say(args, 
                 $"  ledger     : {(Persistence.IsLoaded ? "loaded" : "not on this process")}, " +
                 $"{LandmarkStore.Count.ToString(c)} landmark(s)" +
                 (LandmarkStore.IsDirty ? ", unsaved changes" : ""));

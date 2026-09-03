@@ -150,7 +150,7 @@ landmarks, and that is correct.
 | Seabirds as a landfall signal | **Not in v1.** Good idea, unproven, and it competes for the same "is this legible?" budget as the beacon. Revisit once the beacon is shipped. |
 | Console prefix | `cairn` |
 | GUID / namespace | `com.raveniron.cairn` / `RavenIron.Cairn` |
-| Distribution | Thunderstore **and** Hexium, same zip, store team `RavenIronStudios`, packaged by `tools\package.ps1` — never hand-zipped. |
+| Distribution | **Hexium only** (hexium.gg), store team `RavenIronStudios`, packaged by `tools\package.ps1` — never hand-zipped. Thunderstore is deliberately NOT a channel (owner's call, 2026-09-03). The zip is still built to Thunderstore's package *format*, because that is what Hexium consumes — format and channel are different things and these docs kept conflating them. |
 | Timeline | Open-ended. Done when it's done. |
 
 ### Deliberately unresolved

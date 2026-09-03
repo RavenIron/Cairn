@@ -1,5 +1,6 @@
 # Builds the store release zip: RavenIronStudios-Cairn-<version>.zip in dist\.
-# The same zip goes to Thunderstore and to Hexium.
+# Goes to Hexium (hexium.gg). Thunderstore is not a channel we publish to - but the LAYOUT
+# below is Thunderstore's package format, because that is the format Hexium consumes.
 #
 #   .\tools\package.ps1
 #
@@ -40,7 +41,7 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
-# Thunderstore rejects any other size, with an error that does not name the cause.
+# The store rejects any other size, with an error that does not name the cause.
 Add-Type -AssemblyName System.Drawing
 $icon = [System.Drawing.Image]::FromFile("$root\icon.png")
 $w = $icon.Width; $h = $icon.Height

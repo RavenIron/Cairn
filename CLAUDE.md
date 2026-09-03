@@ -15,8 +15,12 @@ knowledge a crew carries in their heads.
 Design document (the reasoning behind every decision here):
 <https://claude.ai/code/artifact/a04abbae-14d5-4a21-9bdc-032e91da0936>
 
-**Status: THE MOD WORKS.** Stacked stones become a cairn, a cairn burns, and the light was
-seen from 420m down a chain of fifteen the owner built by hand.
+**Status: PUBLISHED 2026-09-02/03, v0.7.0.** Live on the stores under team
+`RavenIronStudios`, categorised "Client & Server - must be installed on both". Built,
+verified and shipped in a single day.
+
+Stacked stones become a cairn, a cairn burns, and the light was seen from 420m down a chain
+of fifteen the owner built by hand.
 
 Every task except the fog probe now has a live run behind it: the skeleton on all three
 roles, the ledger with its sweep, sign pairing, prune, unlight, drift carryover and v1-to-v2

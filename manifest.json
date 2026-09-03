@@ -1,0 +1,9 @@
+{
+  "name": "Cairn",
+  "version_number": "0.7.0",
+  "website_url": "https://github.com/RavenIron/Cairn",
+  "description": "Stack stones on a headland and they burn. A trail of cairns you build yourself, lit and remembered, on a world with no map. No HUD, no markers, no new pieces.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2333"
+  ]
+}
